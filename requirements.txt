@@ -1,0 +1,31 @@
+# Python dependencies for Stock Screener application
+
+# Core framework
+streamlit>=1.30.0
+
+# Data manipulation and analysis
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Technical analysis
+pandas-ta>=0.3.14b
+ta-lib>=0.4.28
+
+# Data visualization
+plotly>=5.18.0
+
+# API and networking
+requests>=2.31.0
+
+# Database (SQLite is built-in, but this ensures latest version)
+# No additional package needed for SQLite
+
+# Development and testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
+black>=23.0.0
+flake8>=6.0.0
+mypy>=1.5.0
+
+# Environment management
+python-dotenv>=1.0.0

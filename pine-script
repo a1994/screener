@@ -1,0 +1,240 @@
+//@version=6
+strategy("23nov_with_rsi_cloud" , overlay= true)
+//indicator("COMBINED_SIGNAL", overlay=false)
+start_date = year >2025 or (year == 2025 and (month > 3 or (month == 1 and dayofmonth >= 1)))
+
+//Calculate  RSI
+
+// Inputs
+rsiLength = input.int(14, "RSI Length")
+maLength  = input.int(14, "MA Length")
+maType    = input.string("SMA", "MA Type", options=["SMA", "EMA", "WMA", "RMA"])
+
+// RSI Calculation
+rsiValue = ta.rsi(close, rsiLength)
+
+// MA of RSI
+maRsi = switch maType
+    "SMA" => ta.sma(rsiValue, maLength)
+    "EMA" => ta.ema(rsiValue, maLength)
+    "WMA" => ta.wma(rsiValue, maLength)
+    "RMA" => ta.rma(rsiValue, maLength)
+
+// Calculate MACD
+[macdLine, signalLine, _] = ta.macd(close, 12, 26, 9)
+
+// Initialize signal_macd
+var float signal_macd = 0
+
+// Supertrend settings
+factor = 3.0
+atrPeriod = 10
+
+// Calculate Supertrend
+[supertrend, _] = ta.supertrend(factor, atrPeriod)
+
+///////////////
+// Define the length of the SMA
+smaLength = 200
+
+// Calculate the 200-day Simple Moving Average
+sma200 = ta.sma(close, smaLength)
+
+// Plot the 200-day SMA
+plot(sma200, color=color.orange, title="200 Day SMA", linewidth=2,force_overlay = true)
+
+
+//////////////////////////////////////////////////////
+//indicator("Ichimoku Cloud (v5) — corrected", overlay=true)
+
+// Inputs
+conversionPeriods = input.int(9, "Conversion Line Length (Tenkan-sen)")
+basePeriods       = input.int(26, "Base Line Length (Kijun-sen)")
+laggingSpan2      = input.int(52, "Leading Span B Length (Senkou Span B)")
+displacementg      = input.int(0, "Displacement")
+displacement      = input.int(26, "Displacement")
+
+tenkanColor = input.color(color.new(color.blue, 0), "Tenkan Color")
+kijunColor  = input.color(color.new(color.red, 0), "Kijun Color")
+chikouColor = input.color(color.new(#b6b3b3, 0), "Chikou Color")
+spanAColor  = input.color(color.new(color.green, 0), "Senkou A Color")
+spanBColor  = input.color(color.new(color.red, 0), "Senkou B Color")
+cloudTransparency = input.int(80, "Cloud Transparency (0-100)", minval=0, maxval=100)
+
+// Calculation
+conversionLine = (ta.highest(high, conversionPeriods) + ta.lowest(low, conversionPeriods)) / 2
+baseLine       = (ta.highest(high, basePeriods)       + ta.lowest(low, basePeriods))       / 2
+leadLineA      = (conversionLine + baseLine) / 2
+leadLineB      = (ta.highest(high, laggingSpan2) + ta.lowest(low, laggingSpan2)) / 2
+lagLine        = close
+
+// Plots (keep references for fill)
+//pTenkan = plot(conversionLine, title="Tenkan-sen (Conversion)", color=tenkanColor, force_overlay = true)
+//pKijun  = plot(baseLine,       title="Kijun-sen (Base)",       color=kijunColor, force_overlay = true)
+pChikou = plot(lagLine,        title="Chikou Span (Lagging)",  color=chikouColor, offset=-displacement, force_overlay = true)
+pSpanA  = plot(leadLineA,      title="Senkou Span A",          color=spanAColor,  offset=displacement, force_overlay = true)
+pSpanB  = plot(leadLineB,      title="Senkou Span B",          color=spanBColor,  offset=displacement, force_overlay = true)
+
+// Fill the cloud (kumo)
+cloudColor = leadLineA >= leadLineB ? color.new(spanAColor, cloudTransparency) : color.new(spanBColor, cloudTransparency)
+fill(pSpanA, pSpanB, color=cloudColor, title="Kumo (Cloud)")
+////////////////////////////////////////////////
+// Define Ichimaku conversion line and base line parameters
+conversionLineLength = input.int(9, title="Conversion Line Length")
+baseLineLength = input.int(26, title="Base Line Length")
+///////////////////
+//Gann highlow
+HPeriod = input(13, 'HIGH Period')
+LPeriod = input(21, 'LOW Period')
+iff_1 = close < nz(ta.sma(low, LPeriod))[1] ? -1 : 0
+HLd = close > nz(ta.sma(high, HPeriod))[1] ? 1 : iff_1
+HLv = ta.valuewhen(HLd != 0, HLd, 0)
+sma_1 = ta.sma(high, HPeriod)
+sma_2 = ta.sma(low, LPeriod)
+HiLo = HLv == -1 ? sma_1 : sma_2
+HLcolor = HLv == -1 ? color.maroon : color.blue
+plot(HiLo, linewidth=2, color=HLcolor)
+
+alertcondition(ta.cross(close, HiLo), title='Price Cross Alert', message='Price - HiLo Crossing!')
+alertcondition(ta.crossover(close, HiLo), title='PRICE CrossOver Alarm', message='LAST PRICE is ABOVE HiLo')
+alertcondition(ta.crossunder(close, HiLo), title='PRICE CrossUnder Alarm', message='LAST PRICE is BELOW HiLo!')
+
+//////////////////////
+
+// Previous values
+leadLineB_prev = leadLineB[1]
+leadLineA_prev = leadLineA[1]
+supertrend_prev = supertrend[1]
+macdLine_prev = macdLine[1]
+high_prev = high[1]
+low_prev = low[1]
+close_prev = close[1]
+HiLo_prev = HiLo[1]
+leadLineA_minus26 = leadLineA[26]
+leadLineB_minus26 = leadLineB[26]
+
+// Conditions for Entry
+condition1 = close > leadLineB 
+condition2 = close > supertrend
+condition3 = supertrend > supertrend_prev
+condition4 = leadLineB > leadLineB_prev 
+condition5 = close > high_prev
+condition6 = macdLine > signalLine and signalLine > 0
+condition6a = macdLine > signalLine 
+condition7 = macdLine > macdLine_prev
+condition8 = close > HiLo
+condition9 = HiLo > HiLo_prev
+condition10 = close > sma200
+candleAboveCloud = close > leadLineA_minus26 and close > leadLineB_minus26
+candleinthecloud = (close < leadLineA_minus26 and close > leadLineB_minus26)  or (close > leadLineA_minus26 and close < leadLineB_minus26) 
+macd_ratio = macdLine/signalLine
+macd_conf = macd_ratio >1.2 or macd_ratio < 0.8
+condition11 = rsiValue > maRsi
+
+// Entry
+if ( condition6a and condition8  and condition11 and condition2 and condition5 ) 
+//if (condition2 and condition5 and condition6 and condition7)
+    strategy.entry("Long", strategy.long)
+
+// Conditions for Exit
+condition_exit1 = leadLineB == leadLineB_prev
+condition_exit2 = supertrend == supertrend_prev
+condition_exit3 = close < low_prev
+condition_exit4 = macdLine < macdLine_prev
+condition_exit5 = macdLine < signalLine
+condition_exit6 = close < HiLo
+// Exit
+if (condition_exit6 or  condition_exit5 or candleinthecloud)
+//if (condition_exit5)
+    strategy.close("Long")
+// Conditions for short
+condition1s = close < leadLineB 
+condition2s = close < supertrend
+condition3s = supertrend < supertrend_prev
+condition4s = leadLineB < leadLineB_prev 
+condition5s = close < low_prev
+condition6s = macdLine < signalLine and signalLine < 0
+condition6sa = macdLine < signalLine 
+condition7s = macdLine < macdLine_prev
+condition8s = close < HiLo
+condition9s = HiLo < HiLo_prev
+condition10s = close < sma200
+candleBelowCloud = close < leadLineA_minus26 and close < leadLineB_minus26
+condition11s = rsiValue < maRsi
+// Entry
+if ( condition6sa and condition7s and condition8s and condition11s and condition2s and condition5s )
+//if (condition2s and condition5s and condition6s and condition7s)
+    strategy.entry("short", strategy.short)
+
+// Conditions for Exit
+condition_exit1s = leadLineB == leadLineB_prev
+condition_exit2s = supertrend == supertrend_prev
+condition_exit3s = close > high_prev
+condition_exit4s = macdLine > macdLine_prev
+condition_exit5s = macdLine > signalLine
+condition_exit6s = close > HiLo
+// Exit
+if (condition_exit6s or  condition_exit5s or candleinthecloud )
+//if (condition_exit5s)
+    strategy.close("short")
+
+// Input parameters
+length2 = input.int(10, title="ATR Length", minval=1)
+factor2 = input.float(3.0, title="Multiplier", step=0.1)
+[superTrend, direction] = ta.supertrend(factor2, length2)
+
+// Plot SuperTrend
+upside = close > superTrend
+colorValue = upside ? color.green : color.red
+plot(superTrend, color=colorValue , title="SuperTrend", linewidth=3, force_overlay = true)
+
+// Plot Ichimaku
+//plot(conversionLine, title = "conversionLine", color=color.yellow, linewidth = 2, force_overlay = true)
+//plot(baseLine, title = "baseLine", color=color.red, linewidth = 2, force_overlay = true)
+
+//  Bollinger Band 
+// Input parameters
+length1 = input.int(20, title="Length")
+src = input(close, title="Source")
+mult = input.float(2.0, title="Multiplier")
+
+// Calculate Bollinger Bands
+basis = ta.sma(src, length1)
+dev = mult * ta.stdev(src, length1)
+upperBand = basis + dev
+lowerBand = basis - dev
+
+// Plot Bollinger Bands
+//plot(basis, title="Basis", color=color.white, linewidth=2, force_overlay = true)
+//plot(upperBand, title="Upper Band", color=color.white, linewidth=1,force_overlay = true)
+//plot(lowerBand, title="Lower Band", color=color.white, linewidth=1,force_overlay = true)
+
+/// buinf and selling pressure RAW 
+length=input(80)
+rawlength=input(20)
+
+sp = high-close
+bp = close-low
+bpavg = ta.ema(bp,length)
+spavg = ta.ema(sp,length)
+nbp = bp/bpavg
+nsp = sp/spavg
+diff = nbp-nsp
+if diff > 0
+    color = 'green'
+else
+    color = 'red'
+Varg = ta.ema(volume,length)
+nv = volume/Varg
+nbfraw = nbp * nv
+nsfraw = nsp * nv
+nbf = ta.ema(nbp * nv,rawlength)
+nsf = ta.ema(nsp * nv,rawlength)
+
+bs_pressure_buy = nbfraw / nsfraw
+bs_pressure_sell = nsfraw / nbfraw
+
+bs_pressure_buy_signal = (bs_pressure_buy > 1.5) and (nbfraw > 1.28)
+bs_pressure_sell_signal = (bs_pressure_sell > 1.5) and (nsfraw > 1.28)
+plotshape(series=bs_pressure_buy_signal, title="Buy Signal", location=location.belowbar, color=color.green, style=shape.arrowup, size=size.small, force_overlay = true)
+plotshape(series=bs_pressure_sell_signal, title="Sell Signal", location=location.abovebar, color=color.red, style=shape.arrowdown, size=size.small, force_overlay = true)
