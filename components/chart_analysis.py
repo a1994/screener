@@ -251,7 +251,7 @@ def _display_recent_signals(df: pd.DataFrame, symbol: str):
         df: DataFrame with signals (filtered by date range)
         symbol: Ticker symbol
     """
-    st.markdown("### 📋 Recent Signals (Last 20 in selected period)")
+    st.markdown("### 📋 Recent Signals (All in selected period)")
     
     # Filter rows with any signal
     signal_cols = ['long_open', 'long_close', 'short_open', 'short_close']
@@ -261,8 +261,8 @@ def _display_recent_signals(df: pd.DataFrame, symbol: str):
         st.info(f"No signals generated for {symbol} in the selected date range")
         return
     
-    # Sort by date descending (latest first) and get last 20 signals
-    df_recent = df_signals.sort_values('date', ascending=False).head(20).copy()
+    # Sort by date descending (latest first) - show ALL signals
+    df_recent = df_signals.sort_values('date', ascending=False).copy()
     
     # Create display DataFrame
     display_df = pd.DataFrame({
