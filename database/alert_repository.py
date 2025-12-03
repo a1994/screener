@@ -24,15 +24,17 @@ class AlertRepository:
         self, 
         page: int = 1, 
         page_size: int = 20, 
-        sort_order: str = 'DESC'
+        sort_order: str = 'DESC',
+        ticker_filter: Optional[str] = None
     ) -> List[Dict]:
         """
-        Get all alerts with pagination and sorting.
+        Get all alerts with pagination, sorting, and optional filtering.
         
         Args:
             page: Page number (1-based)
             page_size: Number of alerts per page
             sort_order: Sort order for signal_date ('ASC' or 'DESC')
+            ticker_filter: Optional ticker symbol filter (case-insensitive partial match)
             
         Returns:
             List of alert dictionaries
@@ -48,19 +50,35 @@ class AlertRepository:
         cursor = conn.cursor()
         
         try:
-            cursor.execute(f"""
+            # Build query with optional filter
+            query = """
                 SELECT 
-                    id,
-                    ticker_id,
-                    ticker_symbol,
-                    alert_type,
-                    signal_date,
-                    price,
-                    created_at
-                FROM alerts
-                ORDER BY signal_date {sort_order}, id {sort_order}
-                LIMIT ? OFFSET ?
-            """, (page_size, offset))
+                    a.id,
+                    a.ticker_id,
+                    a.ticker_symbol,
+                    a.alert_type,
+                    a.signal_date,
+                    a.price,
+                    a.created_at
+                FROM alerts a
+                INNER JOIN tickers t ON a.ticker_id = t.id
+                WHERE t.is_active = 1
+            """
+            
+            params = []
+            where_clauses = []
+            
+            if ticker_filter:
+                where_clauses.append("a.ticker_symbol LIKE ?")
+                params.append(f"%{ticker_filter}%")
+            
+            if where_clauses:
+                query += " AND " + " AND ".join(where_clauses)
+            
+            query += f" ORDER BY a.signal_date {sort_order}, a.id {sort_order} LIMIT ? OFFSET ?"
+            params.extend([page_size, offset])
+            
+            cursor.execute(query, params)
             
             alerts = [dict(row) for row in cursor.fetchall()]
             return alerts
@@ -68,18 +86,33 @@ class AlertRepository:
         finally:
             conn.close()
     
-    def get_total_count(self) -> int:
+    def get_total_count(self, ticker_filter: Optional[str] = None) -> int:
         """
-        Get total count of alerts.
+        Get total count of alerts, optionally filtered.
         
+        Args:
+            ticker_filter: Optional ticker symbol filter (case-insensitive partial match)
+            
         Returns:
-            Total number of alerts
+            Total number of alerts matching the filter
         """
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
         try:
-            cursor.execute("SELECT COUNT(*) FROM alerts")
+            if ticker_filter:
+                cursor.execute("""
+                    SELECT COUNT(*) FROM alerts a
+                    INNER JOIN tickers t ON a.ticker_id = t.id
+                    WHERE t.is_active = 1 AND a.ticker_symbol LIKE ?
+                """, (f"%{ticker_filter}%",))
+            else:
+                cursor.execute("""
+                    SELECT COUNT(*) FROM alerts a
+                    INNER JOIN tickers t ON a.ticker_id = t.id
+                    WHERE t.is_active = 1
+                """)
+            
             count = cursor.fetchone()[0]
             return count
             
@@ -103,16 +136,17 @@ class AlertRepository:
         try:
             cursor.execute("""
                 SELECT 
-                    id,
-                    ticker_id,
-                    ticker_symbol,
-                    alert_type,
-                    signal_date,
-                    price,
-                    created_at
-                FROM alerts
-                WHERE ticker_id = ?
-                ORDER BY signal_date DESC, id DESC
+                    a.id,
+                    a.ticker_id,
+                    a.ticker_symbol,
+                    a.alert_type,
+                    a.signal_date,
+                    a.price,
+                    a.created_at
+                FROM alerts a
+                INNER JOIN tickers t ON a.ticker_id = t.id
+                WHERE a.ticker_id = ? AND t.is_active = 1
+                ORDER BY a.signal_date DESC, a.id DESC
             """, (ticker_id,))
             
             alerts = [dict(row) for row in cursor.fetchall()]
@@ -150,14 +184,16 @@ class AlertRepository:
                         ticker_symbol,
                         alert_type,
                         signal_date,
-                        price
-                    ) VALUES (?, ?, ?, ?, ?)
+                        price,
+                        created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?)
                 """, (
                     ticker_id,
                     ticker_symbol,
                     alert['alert_type'],
                     alert['signal_date'],
-                    alert['price']
+                    alert['price'],
+                    datetime.now().isoformat()  # Local time instead of UTC
                 ))
             
             # Commit transaction

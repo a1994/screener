@@ -261,8 +261,8 @@ def _display_recent_signals(df: pd.DataFrame, symbol: str):
         st.info(f"No signals generated for {symbol} in the selected date range")
         return
     
-    # Get last 20 signals
-    df_recent = df_signals.tail(20).copy()
+    # Sort by date descending (latest first) and get last 20 signals
+    df_recent = df_signals.sort_values('date', ascending=False).head(20).copy()
     
     # Create display DataFrame
     display_df = pd.DataFrame({

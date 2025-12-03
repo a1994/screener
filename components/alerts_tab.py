@@ -21,14 +21,16 @@ def render_alerts_tab():
     # Initialize repository
     alert_repo = AlertRepository(DATABASE_PATH)
     
-    # Initialize session state for pagination and sorting
+    # Initialize session state for pagination, sorting, and filtering
     if 'alert_page' not in st.session_state:
         st.session_state.alert_page = 1
     if 'alert_sort_order' not in st.session_state:
         st.session_state.alert_sort_order = 'DESC'
+    if 'alert_ticker_filter' not in st.session_state:
+        st.session_state.alert_ticker_filter = ''
     
     # Controls row
-    col1, col2, col3 = st.columns([2, 2, 3])
+    col1, col2, col3, col4 = st.columns([2, 2, 2, 2])
     
     with col1:
         # Sort order selector
@@ -47,24 +49,42 @@ def render_alerts_tab():
             st.rerun()
     
     with col2:
+        # Ticker filter input
+        ticker_filter = st.text_input(
+            'Filter by Ticker',
+            value=st.session_state.alert_ticker_filter,
+            placeholder='e.g., AAPL, MSFT',
+            help='Enter ticker symbol to filter alerts'
+        )
+        
+        # Update filter in session state
+        if ticker_filter != st.session_state.alert_ticker_filter:
+            st.session_state.alert_ticker_filter = ticker_filter
+            st.session_state.alert_page = 1  # Reset to first page
+            st.rerun()
+    
+    with col3:
         # Refresh All button
         if st.button('🔄 Refresh All Alerts', type='primary', use_container_width=True):
             _refresh_all_alerts()
     
-    with col3:
+    with col4:
         st.empty()  # Spacer
     
     st.markdown("---")
     
-    # Get alerts with pagination
+    # Get alerts with pagination, sorting, and filtering
     page_size = 20
     try:
         alerts = alert_repo.get_all(
             page=st.session_state.alert_page,
             page_size=page_size,
-            sort_order=st.session_state.alert_sort_order
+            sort_order=st.session_state.alert_sort_order,
+            ticker_filter=st.session_state.alert_ticker_filter or None
         )
-        total_count = alert_repo.get_total_count()
+        total_count = alert_repo.get_total_count(
+            ticker_filter=st.session_state.alert_ticker_filter or None
+        )
     except Exception as e:
         st.error(f"Error loading alerts: {str(e)}")
         return
@@ -153,9 +173,15 @@ def _display_alert_table(alerts: list):
         # Price
         cols[3].markdown(f"${alert['price']:.2f}")
         
-        # Created at (show date only)
-        created_date = alert['created_at'].split(' ')[0] if ' ' in alert['created_at'] else alert['created_at']
-        cols[4].markdown(created_date)
+        # Created at (show date and time in local timezone)
+        try:
+            from datetime import datetime
+            created_dt = datetime.fromisoformat(alert['created_at'])
+            created_display = created_dt.strftime('%Y-%m-%d %H:%M')
+        except:
+            # Fallback if parsing fails
+            created_display = alert['created_at'][:16] if len(alert['created_at']) > 16 else alert['created_at']
+        cols[4].markdown(created_display)
         
         st.markdown("")  # Add spacing
 
