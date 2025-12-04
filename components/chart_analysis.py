@@ -24,6 +24,13 @@ def render_chart_analysis():
         repo = TickerRepository()
         active_symbols = repo.get_active_tickers()
         
+        # Check if ticker list needs to be refreshed (when new tickers are added)
+        if st.session_state.get('ticker_list_updated', False):
+            # Clear the cache and refresh ticker list
+            active_symbols = repo.get_active_tickers()
+            # Reset the flag
+            st.session_state.ticker_list_updated = False
+        
         if not active_symbols:
             st.info("No tickers available. Please add tickers in the Dashboard tab first.")
             return

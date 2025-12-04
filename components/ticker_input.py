@@ -67,6 +67,8 @@ def _render_manual_entry(repo: TickerRepository) -> None:
                 ticker_id = repo.add_ticker(ticker)
                 if ticker_id:
                     st.success(f"✅ Added ticker: {ticker}")
+                    # Trigger refresh of ticker dropdowns in other tabs
+                    st.session_state.ticker_list_updated = True
                 else:
                     st.error(f"Failed to add ticker: {ticker}")
             except Exception as e:
@@ -141,6 +143,8 @@ def _render_comma_separated(repo: TickerRepository) -> None:
                 
                 if result['added'] > 0:
                     st.success(f"✅ Added {result['added']} ticker(s)")
+                    # Trigger refresh of ticker dropdowns in other tabs
+                    st.session_state.ticker_list_updated = True
                 
                 if result['failed'] > 0:
                     st.warning(f"Failed to add {result['failed']} ticker(s)")
@@ -244,6 +248,8 @@ def _render_csv_upload(repo: TickerRepository) -> None:
                     
                     if result['added'] > 0:
                         st.success(f"✅ Added {result['added']} ticker(s)")
+                        # Trigger refresh of ticker dropdowns in other tabs
+                        st.session_state.ticker_list_updated = True
                     
                     if result['failed'] > 0:
                         st.warning(f"Failed to add {result['failed']} ticker(s)")
