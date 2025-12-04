@@ -1,0 +1,224 @@
+//@version=5
+strategy("Trading Signals - Exact Python Logic", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=100)
+
+// =====================================================
+// INDICATOR SETTINGS (Matching Python config/settings.py)
+// =====================================================
+
+// MACD Settings
+macd_fast = 12
+macd_slow = 26
+macd_signal = 9
+
+// RSI Settings
+rsi_period = 14
+rsi_ma_period = 14
+
+// Supertrend Settings
+supertrend_period = 10
+supertrend_multiplier = 3.0
+
+// Ichimoku Settings
+ichimoku_conversion = 9
+ichimoku_base = 26
+ichimoku_span_b_period = 52  // Renamed to avoid conflict with return variable
+ichimoku_displacement = 26
+
+// Gann HiLo Settings
+gann_fast = 13  // HIGH period (SMA of highs)
+gann_slow = 21  // LOW period (SMA of lows)
+
+// EMA Periods
+ema_8 = 8
+ema_21 = 21
+ema_50 = 50
+
+// =====================================================
+// INDICATOR CALCULATIONS
+// =====================================================
+
+// MACD
+[macd_line, signal_line, macd_hist] = ta.macd(close, macd_fast, macd_slow, macd_signal)
+
+// RSI
+rsi = ta.rsi(close, rsi_period)
+rsi_ma = ta.sma(rsi, rsi_ma_period)
+
+// Supertrend
+[supertrend, supertrend_direction] = ta.supertrend(supertrend_multiplier, supertrend_period)
+
+// Ichimoku Cloud (Manual calculation to match Python implementation)
+donchian(len) => math.avg(ta.lowest(len), ta.highest(len))
+
+ichimoku_conversion_line = donchian(ichimoku_conversion)  // Tenkan-sen (Conversion Line)
+ichimoku_base_line = donchian(ichimoku_base)              // Kijun-sen (Base Line)
+ichimoku_span_a = math.avg(ichimoku_conversion_line, ichimoku_base_line)  // Senkou Span A (Leading Span A)
+ichimoku_span_b = donchian(ichimoku_span_b_period)        // Senkou Span B (Leading Span B)
+
+// Shift Span A and B forward by displacement (26 periods)
+// Note: In Pine Script, we plot the current value at a future position
+// This matches the Python implementation where spans are shifted forward
+
+// Gann HiLo Activator (Custom Implementation matching Python)
+sma_high = ta.sma(high, gann_fast)
+sma_low = ta.sma(low, gann_slow)
+
+var float gann_hilo = close
+var int gann_direction = 1
+
+// Gann HiLo Logic (matching Python indicators/gann_hilo.py)
+if (close > sma_high[1])
+    gann_direction := 1
+else if (close < sma_low[1])
+    gann_direction := -1
+
+gann_hilo := gann_direction == 1 ? sma_low : sma_high
+
+// EMAs
+ema_8_line = ta.ema(close, ema_8)
+ema_21_line = ta.ema(close, ema_21)
+ema_50_line = ta.ema(close, ema_50)
+
+// =====================================================
+// SIGNAL CONDITIONS (Matching Python indicators/signals.py)
+// =====================================================
+
+// Helper: Check if price is in Ichimoku Cloud
+in_cloud = (close < ichimoku_span_a and close > ichimoku_span_b) or (close > ichimoku_span_a and close < ichimoku_span_b)
+
+// LONG OPEN Conditions (All 5 must be TRUE)
+condition_macd_bullish = macd_line > signal_line          // condition6a
+condition_close_above_gann = close > gann_hilo            // condition8
+condition_rsi_above_ma = rsi > rsi_ma                     // condition11
+condition_close_above_supertrend = close > supertrend     // condition2
+condition_close_above_prev_high = close > high[1]         // condition5
+
+long_open_signal = condition_macd_bullish and condition_close_above_gann and condition_rsi_above_ma and condition_close_above_supertrend and condition_close_above_prev_high
+
+// LONG CLOSE Conditions (Any 1 of 3 triggers exit)
+condition_long_close_below_gann = close < gann_hilo       // condition_exit6
+condition_long_macd_bearish = macd_line < signal_line     // condition_exit5
+condition_long_in_cloud = in_cloud                        // candleinthecloud
+
+long_close_signal = condition_long_close_below_gann or condition_long_macd_bearish or condition_long_in_cloud
+
+// SHORT OPEN Conditions (All 6 must be TRUE)
+condition_short_macd_bearish = macd_line < signal_line    // condition6sa
+condition_short_macd_falling = macd_line < macd_line[1]   // condition7s
+condition_short_close_below_gann = close < gann_hilo      // condition8s
+condition_short_rsi_below_ma = rsi < rsi_ma               // condition11s
+condition_short_close_below_supertrend = close < supertrend  // condition2s
+condition_short_close_below_prev_low = close < low[1]     // condition5s
+
+short_open_signal = condition_short_macd_bearish and condition_short_macd_falling and condition_short_close_below_gann and condition_short_rsi_below_ma and condition_short_close_below_supertrend and condition_short_close_below_prev_low
+
+// SHORT CLOSE Conditions (Any 1 of 3 triggers exit)
+condition_short_close_above_gann = close > gann_hilo      // condition_exit6s
+condition_short_macd_bullish = macd_line > signal_line    // condition_exit5s
+condition_short_in_cloud = in_cloud                       // candleinthecloud
+
+short_close_signal = condition_short_close_above_gann or condition_short_macd_bullish or condition_short_in_cloud
+
+// =====================================================
+// POSITION TRACKING (Matching Python _apply_position_tracking)
+// =====================================================
+
+// Initialize position state
+var string position = "NONE"  // "NONE", "LONG", or "SHORT"
+
+// Apply position tracking logic
+var bool long_open = false
+var bool long_close = false
+var bool short_open = false
+var bool short_close = false
+
+// Reset signals
+long_open := false
+long_close := false
+short_open := false
+short_close := false
+
+// LONG OPEN
+if (long_open_signal and position != "LONG")
+    long_open := true
+    if (position == "SHORT")
+        short_close := true  // Close short before opening long
+    position := "LONG"
+
+// LONG CLOSE
+if (long_close_signal and position == "LONG")
+    long_close := true
+    position := "NONE"
+
+// SHORT OPEN
+if (short_open_signal and position != "SHORT")
+    short_open := true
+    if (position == "LONG")
+        long_close := true  // Close long before opening short
+    position := "SHORT"
+
+// SHORT CLOSE
+if (short_close_signal and position == "SHORT")
+    short_close := true
+    position := "NONE"
+
+// =====================================================
+// STRATEGY EXECUTION
+// =====================================================
+
+if (long_open)
+    strategy.entry("Long", strategy.long)
+
+if (long_close)
+    strategy.close("Long")
+
+if (short_open)
+    strategy.entry("Short", strategy.short)
+
+if (short_close)
+    strategy.close("Short")
+
+// =====================================================
+// PLOT INDICATORS ON CHART
+// =====================================================
+
+// Plot Gann HiLo
+plot(gann_hilo, "Gann HiLo", color=gann_direction == 1 ? color.green : color.red, linewidth=2)
+
+// Plot Supertrend
+plot(supertrend, "Supertrend", color=supertrend_direction < 0 ? color.green : color.red, linewidth=2)
+
+// Plot EMAs
+plot(ema_8_line, "EMA 8", color=color.yellow, linewidth=1)
+plot(ema_21_line, "EMA 21", color=color.orange, linewidth=1)
+plot(ema_50_line, "EMA 50", color=color.blue, linewidth=2)
+
+// Plot Ichimoku Cloud (with displacement offset to match Python)
+p1 = plot(ichimoku_span_a, "Span A", color=color.new(color.green, 50), offset=ichimoku_displacement)
+p2 = plot(ichimoku_span_b, "Span B", color=color.new(color.red, 50), offset=ichimoku_displacement)
+fill(p1, p2, color=ichimoku_span_a > ichimoku_span_b ? color.new(color.green, 90) : color.new(color.red, 90), title="Ichimoku Cloud")
+
+// =====================================================
+// PLOT SIGNAL MARKERS (Matching chart colors)
+// =====================================================
+
+// Plot signals with exact colors from Python charts/plotly_renderer.py
+plotshape(long_open, "Long OPEN", shape.triangleup, location.belowbar, color=#00FF00, size=size.small, text="LONG\nOPEN")
+plotshape(long_close, "Long CLOSE", shape.triangledown, location.abovebar, color=#FF00FF, size=size.small, text="LONG\nCLOSE")
+plotshape(short_open, "Short OPEN", shape.triangledown, location.abovebar, color=#FFA500, size=size.small, text="SHORT\nOPEN")
+plotshape(short_close, "Short CLOSE", shape.triangleup, location.belowbar, color=#00FFFF, size=size.small, text="SHORT\nCLOSE")
+
+// =====================================================
+// ALERTS (For TradingView Notifications)
+// =====================================================
+
+alertcondition(long_open, "Long OPEN", "🟢 LONG OPEN Signal!")
+alertcondition(long_close, "Long CLOSE", "🔴 LONG CLOSE Signal!")
+alertcondition(short_open, "Short OPEN", "🟠 SHORT OPEN Signal!")
+alertcondition(short_close, "Short CLOSE", "🔵 SHORT CLOSE Signal!")
+
+// =====================================================
+// BACKGROUND COLOR FOR POSITION STATE
+// =====================================================
+
+bgcolor(position == "LONG" ? color.new(color.green, 95) : position == "SHORT" ? color.new(color.red, 95) : na, title="Position Background")
