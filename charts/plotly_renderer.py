@@ -187,81 +187,81 @@ class ChartRenderer:
     
     def _add_signal_markers(self, fig: go.Figure):
         """Add signal markers on chart."""
-        # Long OPEN - Green triangle up
+        # Long OPEN - Bright Lime Green with black border (distinct from candle green)
         if 'long_open' in self.df.columns:
             long_open = self.df[self.df['long_open'] == True]
             if len(long_open) > 0:
                 fig.add_trace(
                     go.Scatter(
                         x=long_open['date'],
-                        y=long_open['low'] * 0.995,  # Slightly below candle
+                        y=long_open['low'] * 0.99,  # Slightly below candle
                         mode='markers',
-                        name='Long OPEN',
+                        name='🟢 Long OPEN',
                         marker=dict(
                             symbol='triangle-up',
-                            size=12,
-                            color='#4CAF50',
-                            line=dict(color='white', width=1)
+                            size=16,
+                            color='#00FF00',  # Bright lime green
+                            line=dict(color='#000000', width=2)  # Black border
                         )
                     ),
                     row=1, col=1
                 )
         
-        # Long CLOSE - Red triangle down
+        # Long CLOSE - Bright Magenta/Pink with black border (distinct from candle red)
         if 'long_close' in self.df.columns:
             long_close = self.df[self.df['long_close'] == True]
             if len(long_close) > 0:
                 fig.add_trace(
                     go.Scatter(
                         x=long_close['date'],
-                        y=long_close['high'] * 1.005,  # Slightly above candle
+                        y=long_close['high'] * 1.01,  # Slightly above candle
                         mode='markers',
-                        name='Long CLOSE',
+                        name='🔴 Long CLOSE',
                         marker=dict(
                             symbol='triangle-down',
-                            size=12,
-                            color='#F44336',
-                            line=dict(color='white', width=1)
+                            size=16,
+                            color='#FF00FF',  # Bright magenta
+                            line=dict(color='#000000', width=2)  # Black border
                         )
                     ),
                     row=1, col=1
                 )
         
-        # Short OPEN - Orange triangle down
+        # Short OPEN - Bright Orange/Yellow with black border
         if 'short_open' in self.df.columns:
             short_open = self.df[self.df['short_open'] == True]
             if len(short_open) > 0:
                 fig.add_trace(
                     go.Scatter(
                         x=short_open['date'],
-                        y=short_open['high'] * 1.005,
+                        y=short_open['high'] * 1.01,
                         mode='markers',
-                        name='Short OPEN',
+                        name='🟠 Short OPEN',
                         marker=dict(
                             symbol='triangle-down',
-                            size=12,
-                            color='#FF9800',
-                            line=dict(color='white', width=1)
+                            size=16,
+                            color='#FFA500',  # Bright orange
+                            line=dict(color='#000000', width=2)  # Black border
                         )
                     ),
                     row=1, col=1
                 )
         
-        # Short CLOSE - Cyan triangle up
+        # Short CLOSE - Bright Cyan/Aqua with black border
         if 'short_close' in self.df.columns:
             short_close = self.df[self.df['short_close'] == True]
             if len(short_close) > 0:
                 fig.add_trace(
                     go.Scatter(
                         x=short_close['date'],
-                        y=short_close['low'] * 0.995,
+                        y=short_close['low'] * 0.99,
                         mode='markers',
-                        name='Short CLOSE',
+                        name='🔵 Short CLOSE',
                         marker=dict(
                             symbol='triangle-up',
-                            size=12,
-                            color='#00BCD4',
-                            line=dict(color='white', width=1)
+                            size=16,
+                            color='#00FFFF',  # Bright cyan
+                            line=dict(color='#000000', width=2)  # Black border
                         )
                     ),
                     row=1, col=1
@@ -324,8 +324,15 @@ class ChartRenderer:
             )
         )
         
-        # Update x-axes
-        fig.update_xaxes(title_text='Date', row=2, col=1)
+        # Remove non-trading days (weekends) from both x-axes to make chart smooth
+        # This removes gaps where markets are closed
+        rangebreaks = [
+            dict(bounds=["sat", "mon"]),  # Hide weekends (Saturday to Monday)
+        ]
+        
+        # Update x-axes with rangebreaks to hide non-trading days
+        fig.update_xaxes(rangebreaks=rangebreaks, row=1, col=1)
+        fig.update_xaxes(title_text='Date', rangebreaks=rangebreaks, row=2, col=1)
         
         # Update y-axes
         fig.update_yaxes(title_text='Price', row=1, col=1)

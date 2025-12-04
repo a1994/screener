@@ -28,6 +28,13 @@ def init_app() -> None:
     
     try:
         init_db(str(db_path))
+        
+        # Initialize session state for ticker list
+        if 'active_tickers' not in st.session_state:
+            from database import TickerRepository
+            repo = TickerRepository()
+            st.session_state.active_tickers = repo.get_active_tickers()
+        
     except Exception as e:
         st.error(f"Error initializing database: {str(e)}")
         st.stop()

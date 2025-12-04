@@ -19,17 +19,12 @@ def render_chart_analysis():
     """
     st.subheader("📈 Chart Analysis & Trading Signals")
     
-    # Get active tickers from database
+    # Get active tickers from database - always fetch fresh to ensure new tickers appear
     try:
         repo = TickerRepository()
-        active_symbols = repo.get_active_tickers()
         
-        # Check if ticker list needs to be refreshed (when new tickers are added)
-        if st.session_state.get('ticker_list_updated', False):
-            # Clear the cache and refresh ticker list
-            active_symbols = repo.get_active_tickers()
-            # Reset the flag
-            st.session_state.ticker_list_updated = False
+        # Always fetch fresh ticker list from database to ensure new tickers appear
+        active_symbols = repo.get_active_tickers()
         
         if not active_symbols:
             st.info("No tickers available. Please add tickers in the Dashboard tab first.")
@@ -38,10 +33,14 @@ def render_chart_analysis():
         # Ticker selection and date range
         col1, col2, col3 = st.columns([2, 2, 1])
         
+        # Generate a unique key based on ticker count to force selectbox refresh
+        ticker_key = f"ticker_select_{len(active_symbols)}"
+        
         with col1:
             selected_symbol = st.selectbox(
                 "Select Ticker",
                 options=sorted(active_symbols),
+                key=ticker_key,
                 help="Choose a ticker to analyze"
             )
         
