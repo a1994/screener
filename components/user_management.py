@@ -73,7 +73,7 @@ def render_user_selector() -> int:
             st.rerun()  # Refresh the app with new user context
     
     with col2:  # Add user button
-        if st.button("➕ Add User", help="Create a new user"):
+        if st.button("➕ Add User", help="Create a new user", key="user_add_btn"):
             st.session_state.show_add_user_form = True
     
     # Show add user form if triggered
@@ -115,10 +115,10 @@ def _render_add_user_form(user_repo: UserRepository):
             col1, col2, col3 = st.columns([1, 1, 1])
             
             with col1:
-                submitted = st.form_submit_button("✅ Create User", type="primary")
+                submitted = st.form_submit_button("✅ Create User", type="primary", key="user_create_submit")
             
             with col2:
-                cancelled = st.form_submit_button("❌ Cancel")
+                cancelled = st.form_submit_button("❌ Cancel", key="user_create_cancel")
             
             # Handle form submission
             if submitted:

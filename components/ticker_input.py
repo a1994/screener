@@ -48,7 +48,7 @@ def _render_manual_entry(repo: TickerRepository, user_id: int) -> None:
             help="Enter a single ticker symbol (1-5 characters, alphanumeric or dots)"
         )
         
-        submitted = st.form_submit_button("Add Ticker")
+        submitted = st.form_submit_button("Add Ticker", key="manual_ticker_submit")
         
         if submitted and ticker_input:
             ticker = normalize_ticker(ticker_input)
@@ -93,7 +93,7 @@ def _render_comma_separated(repo: TickerRepository, user_id: int) -> None:
             height=100
         )
         
-        submitted = st.form_submit_button("Add Tickers")
+        submitted = st.form_submit_button("Add Tickers", key="bulk_ticker_submit")
         
         if submitted and ticker_input:
             # Parse tickers
@@ -215,7 +215,7 @@ def _render_csv_upload(repo: TickerRepository, user_id: int) -> None:
                 if len(tickers) > 20:
                     st.text(f"... and {len(tickers) - 20} more")
             
-            if st.button("Add Tickers from CSV"):
+            if st.button("Add Tickers from CSV", key="ticker_csv_add_btn"):
                 # Validate all tickers
                 invalid_tickers = []
                 valid_tickers = []

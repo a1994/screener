@@ -139,29 +139,27 @@ def render_dashboard(repo: TickerRepository, user_id: int = 1) -> None:
             col1, col2, col3, col4, col5 = st.columns([1, 1, 2, 1, 1])
             
             with col1:
-                if st.button("⏮️ First", disabled=st.session_state.page == 1):
+                if st.button("⏮️ First", disabled=st.session_state.page == 1, key="dashboard_first_btn"):
                     st.session_state.page = 1
                     st.rerun()
-            
+
             with col2:
-                if st.button("◀️ Prev", disabled=st.session_state.page == 1):
+                if st.button("◀️ Prev", disabled=st.session_state.page == 1, key="dashboard_prev_btn"):
                     st.session_state.page -= 1
                     st.rerun()
-            
+
             with col3:
                 st.write(f"Page {st.session_state.page} of {total_pages}")
             
             with col4:
-                if st.button("Next ▶️", disabled=st.session_state.page >= total_pages):
+                if st.button("Next ▶️", disabled=st.session_state.page >= total_pages, key="dashboard_next_btn"):
                     st.session_state.page += 1
                     st.rerun()
-            
+
             with col5:
-                if st.button("Last ⏭️", disabled=st.session_state.page >= total_pages):
+                if st.button("Last ⏭️", disabled=st.session_state.page >= total_pages, key="dashboard_last_btn"):
                     st.session_state.page = total_pages
-                    st.rerun()
-        
-        # Bulk actions
+                    st.rerun()        # Bulk actions
         selected_tickers = edited_df[edited_df['Select']]['id'].tolist()
         
         if selected_tickers:
@@ -170,7 +168,7 @@ def render_dashboard(repo: TickerRepository, user_id: int = 1) -> None:
             col1, col2 = st.columns([1, 5])
             
             with col1:
-                if st.button("🗑️ Delete Selected", type="primary"):
+                if st.button("🗑️ Delete Selected", type="primary", key="dashboard_delete_btn"):
                     try:
                         deleted_count = repo.bulk_delete(selected_tickers)
                         if deleted_count > 0:
@@ -196,11 +194,12 @@ def render_dashboard(repo: TickerRepository, user_id: int = 1) -> None:
                 data=csv_data.to_csv(index=False),
                 file_name="tickers_export.csv",
                 mime="text/csv",
-                help="Export tickers on current page to CSV"
+                help="Export tickers on current page to CSV",
+                key="dashboard_export_page_btn"
             )
         
         with col2:
-            if st.button("📥 Export All Tickers"):
+            if st.button("📥 Export All Tickers", key="dashboard_export_btn"):
                 try:
                     all_tickers = repo.get_active_tickers()
                     if all_tickers:
@@ -210,6 +209,7 @@ def render_dashboard(repo: TickerRepository, user_id: int = 1) -> None:
                             data=csv_data.to_csv(index=False),
                             file_name="all_tickers_export.csv",
                             mime="text/csv",
+                            key="dashboard_export_all_btn"
                         )
                     else:
                         st.info("No tickers to export")

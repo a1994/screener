@@ -69,7 +69,7 @@ def render_alerts_tab(user_id: int = 1):
     
     with col3:
         # Refresh All button
-        if st.button('🔄 Refresh Alerts', type='primary', use_container_width=True):
+        if st.button('🔄 Refresh Alerts', type='primary', use_container_width=True, key='alerts_refresh_btn'):
             _refresh_user_alerts(user_id)
     
     with col4:
@@ -203,12 +203,12 @@ def _display_pagination(total_count: int, page_size: int):
     col1, col2, col3, col4, col5 = st.columns([2, 1, 2, 1, 2])
     
     with col1:
-        if st.button('⏮️ First', disabled=(st.session_state.alert_page == 1)):
+        if st.button('⏮️ First', disabled=(st.session_state.alert_page == 1), key='alerts_first_btn'):
             st.session_state.alert_page = 1
             st.rerun()
     
     with col2:
-        if st.button('◀️ Prev', disabled=(st.session_state.alert_page == 1)):
+        if st.button('◀️ Prev', disabled=(st.session_state.alert_page == 1), key='alerts_prev_btn'):
             st.session_state.alert_page -= 1
             st.rerun()
     
@@ -219,12 +219,12 @@ def _display_pagination(total_count: int, page_size: int):
         )
     
     with col4:
-        if st.button('Next ▶️', disabled=(st.session_state.alert_page == total_pages)):
+        if st.button('Next ▶️', disabled=(st.session_state.alert_page == total_pages), key='alerts_next_btn'):
             st.session_state.alert_page += 1
             st.rerun()
     
     with col5:
-        if st.button('Last ⏭️', disabled=(st.session_state.alert_page == total_pages)):
+        if st.button('Last ⏭️', disabled=(st.session_state.alert_page == total_pages), key='alerts_last_btn'):
             st.session_state.alert_page = total_pages
             st.rerun()
 

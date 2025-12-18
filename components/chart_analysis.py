@@ -56,7 +56,7 @@ def render_chart_analysis(user_id: int = 1):
             )
         
         with col3:
-            load_button = st.button("📊 Load Chart", type="primary")
+            load_button = st.button("📈 Load Chart", type="primary", key="chart_load_btn")
         
         # Load and display chart
         if load_button and selected_symbol:
