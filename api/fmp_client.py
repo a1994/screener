@@ -6,7 +6,8 @@ from typing import Dict, List, Optional
 from datetime import datetime
 import time
 
-from config import FMP_API_KEY, FMP_BASE_URL
+# Legacy FMP client - keeping for backward compatibility
+# Note: FMP_API_KEY removed from config - using fallback values
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +15,7 @@ logger = logging.getLogger(__name__)
 class FMPClient:
     """Client for Financial Modeling Prep API."""
     
-    def __init__(self, api_key: str = FMP_API_KEY, base_url: str = FMP_BASE_URL):
+    def __init__(self, api_key: str = 'MpWngYwXg4WMCz4sQzz5byJzB8SGekBt', base_url: str = 'https://financialmodelingprep.com/stable'):
         """
         Initialize FMP client.
         

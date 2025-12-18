@@ -15,6 +15,7 @@ from database import init_db, get_db_connection, TickerRepository
 # Import components
 from components import render_ticker_input, render_dashboard, render_ticker_stats, render_chart_analysis
 from components.alerts_tab import render_alerts_tab
+from components.user_management import render_user_selector, render_user_info_sidebar, get_current_user_id, initialize_user_system
 
 
 def init_app() -> None:
@@ -29,11 +30,13 @@ def init_app() -> None:
     try:
         init_db(str(db_path))
         
-        # Initialize session state for ticker list
+        # Initialize user system after database is ready
+        initialize_user_system()
+        
+        # Initialize session state for user-specific ticker list
+        # This will be updated when user changes in render_user_selector
         if 'active_tickers' not in st.session_state:
-            from database import TickerRepository
-            repo = TickerRepository()
-            st.session_state.active_tickers = repo.get_active_tickers()
+            st.session_state.active_tickers = []
         
     except Exception as e:
         st.error(f"Error initializing database: {str(e)}")
@@ -46,13 +49,17 @@ def render_sidebar() -> None:
         st.title(f"{APP_ICON} Stock Screener")
         st.markdown("---")
         
-        # Display stats
+        # Display user-specific stats
         st.subheader("📊 Statistics")
         try:
+            current_user_id = get_current_user_id()
             repo = TickerRepository()
-            render_ticker_stats(repo)
+            render_ticker_stats(repo, user_id=current_user_id)
         except Exception as e:
             st.error(f"Error loading stats: {str(e)}")
+        
+        # Render user info
+        render_user_info_sidebar()
         
         st.markdown("---")
         
@@ -100,6 +107,13 @@ def main():
     # Initialize app
     init_app()
     
+    # Render user selector in top-right area
+    current_user_id = render_user_selector()
+    
+    # Update active tickers for current user
+    repo = TickerRepository()
+    st.session_state.active_tickers = repo.get_active_tickers(current_user_id)
+    
     # Render sidebar
     render_sidebar()
     
@@ -110,11 +124,11 @@ def main():
     tab1, tab2, tab3 = st.tabs(["📈 Chart Analysis", "🔔 Alerts", "📋 Dashboard"])
     
     with tab1:
-        render_chart_analysis()
+        render_chart_analysis(user_id=current_user_id)
     
     with tab2:
         try:
-            render_alerts_tab()
+            render_alerts_tab(user_id=current_user_id)
         except Exception as e:
             st.error(f"Error loading alerts: {str(e)}")
             st.exception(e)
@@ -125,12 +139,12 @@ def main():
             
             # Add ticker section (collapsible)
             with st.expander("➕ Add Tickers", expanded=False):
-                render_ticker_input(repo)
+                render_ticker_input(repo, user_id=current_user_id)
             
             st.markdown("---")
             
-            # Dashboard
-            render_dashboard(repo)
+            # Dashboard (user-specific)
+            render_dashboard(repo, user_id=current_user_id)
         
         except Exception as e:
             st.error(f"Error loading dashboard: {str(e)}")

@@ -6,16 +6,19 @@ import logging
 from typing import Optional
 
 from database import TickerRepository
-from api import FMPClient, CacheManager
+from api import DataClient, CacheManager
 from indicators import IndicatorCalculator, SignalGenerator
 from charts import ChartRenderer
 
 logger = logging.getLogger(__name__)
 
 
-def render_chart_analysis():
+def render_chart_analysis(user_id: int = 1):
     """
-    Render Chart Analysis tab with ticker selection and chart display.
+    Render Chart Analysis tab with ticker selection and chart display for a specific user.
+    
+    Args:
+        user_id: User ID to filter tickers by
     """
     st.subheader("📈 Chart Analysis & Trading Signals")
     
@@ -24,7 +27,7 @@ def render_chart_analysis():
         repo = TickerRepository()
         
         # Always fetch fresh ticker list from database to ensure new tickers appear
-        active_symbols = repo.get_active_tickers()
+        active_symbols = repo.get_active_tickers(user_id=user_id)
         
         if not active_symbols:
             st.info("No tickers available. Please add tickers in the Dashboard tab first.")
@@ -58,7 +61,7 @@ def render_chart_analysis():
         # Load and display chart
         if load_button and selected_symbol:
             with st.spinner(f"Loading chart for {selected_symbol}..."):
-                _load_and_display_chart(selected_symbol, repo, date_range)
+                _load_and_display_chart(selected_symbol, repo, date_range, user_id)
         
         # Show instructions if no chart loaded
         if not load_button:
@@ -92,25 +95,27 @@ def render_chart_analysis():
         logger.error(f"Chart Analysis error: {e}", exc_info=True)
 
 
-def _load_and_display_chart(symbol: str, repo: TickerRepository, date_range: str = '3 months'):
+def _load_and_display_chart(symbol: str, repo: TickerRepository, date_range: str = '3 months', user_id: int = 1):
     """
     Load data, calculate indicators, and display chart.
     
     Args:
         symbol: Ticker symbol
         repo: TickerRepository instance
+        date_range: Date range for data
+        user_id: User ID to filter tickers by
     """
     try:
         # Get ticker from database
-        ticker = repo.get_by_symbol(symbol)
+        ticker = repo.get_by_symbol(symbol, user_id=user_id)
         if not ticker:
-            st.error(f"Ticker {symbol} not found in database")
+            st.error(f"Ticker {symbol} not found in database for current user")
             return
         
         ticker_id = ticker['id']
         
         # Initialize clients
-        fmp_client = FMPClient()
+        data_client = DataClient()
         cache_manager = CacheManager()
         
         # Check cache first
@@ -121,8 +126,8 @@ def _load_and_display_chart(symbol: str, repo: TickerRepository, date_range: str
             df = cached_df
         else:
             # Fetch from API
-            st.info(f"Fetching data from API for {symbol}...")
-            price_data = fmp_client.get_historical_prices(symbol)
+            st.info(f"Fetching data from yfinance for {symbol}...")
+            price_data = data_client.get_historical_prices(symbol, period='max')
             
             if not price_data:
                 st.error(f"Failed to fetch data for {symbol}. Please check if the ticker is valid.")

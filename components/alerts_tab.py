@@ -9,11 +9,15 @@ import math
 
 from database.alert_repository import AlertRepository
 from alerts.refresher import AlertRefresher
-from config.settings import DATABASE_PATH, FMP_API_KEY
+from config.settings import DATABASE_PATH
 
 
-def render_alerts_tab():
-    """Render the Alerts tab with alert dashboard."""
+def render_alerts_tab(user_id: int = 1):
+    """Render the Alerts tab with alert dashboard for a specific user.
+    
+    Args:
+        user_id: User ID to filter alerts by
+    """
     
     st.header("📊 Trading Alerts Dashboard")
     st.markdown("Monitor trading signals across all your tickers in one place.")
@@ -65,8 +69,8 @@ def render_alerts_tab():
     
     with col3:
         # Refresh All button
-        if st.button('🔄 Refresh All Alerts', type='primary', use_container_width=True):
-            _refresh_all_alerts()
+        if st.button('🔄 Refresh Alerts', type='primary', use_container_width=True):
+            _refresh_user_alerts(user_id)
     
     with col4:
         st.empty()  # Spacer
@@ -80,10 +84,12 @@ def render_alerts_tab():
             page=st.session_state.alert_page,
             page_size=page_size,
             sort_order=st.session_state.alert_sort_order,
-            ticker_filter=st.session_state.alert_ticker_filter or None
+            ticker_filter=st.session_state.alert_ticker_filter or None,
+            user_id=user_id
         )
         total_count = alert_repo.get_total_count(
-            ticker_filter=st.session_state.alert_ticker_filter or None
+            ticker_filter=st.session_state.alert_ticker_filter or None,
+            user_id=user_id
         )
     except Exception as e:
         st.error(f"Error loading alerts: {str(e)}")
@@ -91,7 +97,7 @@ def render_alerts_tab():
     
     # Display alerts
     if not alerts:
-        st.info("📭 No alerts yet. Add tickers to your dashboard and refresh alerts.")
+        st.info("📭 No alerts for current user yet. Add tickers to your dashboard and refresh alerts.")
         return
     
     # Alert summary metrics
@@ -223,11 +229,11 @@ def _display_pagination(total_count: int, page_size: int):
             st.rerun()
 
 
-def _refresh_all_alerts():
-    """Refresh alerts for all tickers with progress tracking."""
+def _refresh_user_alerts(user_id: int):
+    """Refresh alerts for current user's tickers with progress tracking."""
     
     # Create refresher
-    refresher = AlertRefresher(FMP_API_KEY, DATABASE_PATH)
+    refresher = AlertRefresher(DATABASE_PATH)
     
     # Progress container
     progress_bar = st.progress(0)
@@ -241,7 +247,7 @@ def _refresh_all_alerts():
     
     # Run refresh
     try:
-        stats = refresher.refresh_all(progress_callback=progress_callback)
+        stats = refresher.refresh_all(progress_callback=progress_callback, user_id=user_id)
         
         # Clear progress indicators
         progress_bar.empty()

@@ -25,7 +25,8 @@ class AlertRepository:
         page: int = 1, 
         page_size: int = 20, 
         sort_order: str = 'DESC',
-        ticker_filter: Optional[str] = None
+        ticker_filter: Optional[str] = None,
+        user_id: Optional[int] = None
     ) -> List[Dict]:
         """
         Get all alerts with pagination, sorting, and optional filtering.
@@ -35,6 +36,7 @@ class AlertRepository:
             page_size: Number of alerts per page
             sort_order: Sort order for signal_date ('ASC' or 'DESC')
             ticker_filter: Optional ticker symbol filter (case-insensitive partial match)
+            user_id: Optional user ID to filter alerts by associated tickers
             
         Returns:
             List of alert dictionaries
@@ -68,6 +70,10 @@ class AlertRepository:
             params = []
             where_clauses = []
             
+            if user_id is not None:
+                where_clauses.append("t.user_id = ?")
+                params.append(user_id)
+            
             if ticker_filter:
                 where_clauses.append("a.ticker_symbol LIKE ?")
                 params.append(f"%{ticker_filter}%")
@@ -86,12 +92,13 @@ class AlertRepository:
         finally:
             conn.close()
     
-    def get_total_count(self, ticker_filter: Optional[str] = None) -> int:
+    def get_total_count(self, ticker_filter: Optional[str] = None, user_id: Optional[int] = None) -> int:
         """
         Get total count of alerts, optionally filtered.
         
         Args:
             ticker_filter: Optional ticker symbol filter (case-insensitive partial match)
+            user_id: Optional user ID to filter alerts by associated tickers
             
         Returns:
             Total number of alerts matching the filter
@@ -100,18 +107,28 @@ class AlertRepository:
         cursor = conn.cursor()
         
         try:
+            # Build query with optional filters
+            query = """
+                SELECT COUNT(*) FROM alerts a
+                INNER JOIN tickers t ON a.ticker_id = t.id
+                WHERE t.is_active = 1
+            """
+            
+            params = []
+            where_clauses = []
+            
+            if user_id is not None:
+                where_clauses.append("t.user_id = ?")
+                params.append(user_id)
+            
             if ticker_filter:
-                cursor.execute("""
-                    SELECT COUNT(*) FROM alerts a
-                    INNER JOIN tickers t ON a.ticker_id = t.id
-                    WHERE t.is_active = 1 AND a.ticker_symbol LIKE ?
-                """, (f"%{ticker_filter}%",))
-            else:
-                cursor.execute("""
-                    SELECT COUNT(*) FROM alerts a
-                    INNER JOIN tickers t ON a.ticker_id = t.id
-                    WHERE t.is_active = 1
-                """)
+                where_clauses.append("a.ticker_symbol LIKE ?")
+                params.append(f"%{ticker_filter}%")
+            
+            if where_clauses:
+                query += " AND " + " AND ".join(where_clauses)
+            
+            cursor.execute(query, params)
             
             count = cursor.fetchone()[0]
             return count

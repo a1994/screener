@@ -2,6 +2,7 @@
 
 import re
 from typing import Tuple, Optional, List, Dict
+from config import MAX_TICKER_LENGTH
 
 
 def validate_ticker(symbol: str) -> Tuple[bool, Optional[str]]:
@@ -9,8 +10,8 @@ def validate_ticker(symbol: str) -> Tuple[bool, Optional[str]]:
     Validate ticker symbol format.
     
     Rules:
-    - 1-5 characters (most tickers)
-    - Alphanumeric plus dots (for international tickers like BRK.B)
+    - 1-10 characters (supports longer international tickers)
+    - Alphanumeric plus dots, hyphens, and caret (for tickers like BRK.B, BRK-A, or ^NSEI)
     - Not empty after strip
     
     Args:
@@ -24,16 +25,16 @@ def validate_ticker(symbol: str) -> Tuple[bool, Optional[str]]:
     
     symbol = symbol.strip().upper()
     
-    # Check length (allowing dots)
-    symbol_without_dots = symbol.replace('.', '')
-    if len(symbol_without_dots) < 1:
+    # Check length (allowing dots, hyphens, and caret)
+    symbol_without_separators = symbol.replace('.', '').replace('-', '').replace('^', '')
+    if len(symbol_without_separators) < 1:
         return False, "Ticker too short"
-    if len(symbol_without_dots) > 5:
-        return False, "Ticker symbol too long (max 5 characters excluding dots)"
+    if len(symbol_without_separators) > MAX_TICKER_LENGTH:
+        return False, f"Ticker symbol too long (max {MAX_TICKER_LENGTH} characters excluding dots/hyphens/caret)"
     
-    # Check for valid characters (alphanumeric + dots)
-    if not re.match(r'^[A-Z0-9.]+$', symbol):
-        return False, "Ticker contains invalid characters (only letters, numbers, and dots allowed)"
+    # Check for valid characters (alphanumeric + dots + hyphens + caret)
+    if not re.match(r'^[A-Z0-9.\-^]+$', symbol):
+        return False, "Ticker contains invalid characters (only letters, numbers, dots, hyphens, and ^ allowed)"
     
     return True, None
 

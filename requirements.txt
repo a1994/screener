@@ -16,6 +16,7 @@ plotly>=5.18.0
 
 # API and networking
 requests>=2.31.0
+yfinance>=0.2.18
 
 # Database (SQLite is built-in, but this ensures latest version)
 # No additional package needed for SQLite

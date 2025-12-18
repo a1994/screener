@@ -9,12 +9,13 @@ from utils import format_datetime, format_count
 from config import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 
 
-def render_dashboard(repo: TickerRepository) -> None:
+def render_dashboard(repo: TickerRepository, user_id: int = 1) -> None:
     """
-    Render ticker management dashboard with table, pagination, and filters.
+    Render ticker management dashboard with table, pagination, and filters for a specific user.
     
     Args:
         repo: TickerRepository instance for database operations
+        user_id: User ID to filter tickers by
     """
     st.subheader("Ticker Management Dashboard")
     
@@ -93,7 +94,8 @@ def render_dashboard(repo: TickerRepository) -> None:
             page_size=st.session_state.page_size,
             sort_by=st.session_state.sort_by,
             sort_dir=st.session_state.sort_dir,
-            search_query=st.session_state.search_query if st.session_state.search_query else None
+            search_query=st.session_state.search_query if st.session_state.search_query else None,
+            user_id=user_id
         )
         
         # Display count
@@ -218,15 +220,16 @@ def render_dashboard(repo: TickerRepository) -> None:
         st.error(f"Error loading tickers: {str(e)}")
 
 
-def render_ticker_stats(repo: TickerRepository) -> None:
+def render_ticker_stats(repo: TickerRepository, user_id: int = 1) -> None:
     """
-    Render ticker statistics in sidebar or separate section.
+    Render ticker statistics in sidebar or separate section for a specific user.
     
     Args:
         repo: TickerRepository instance
+        user_id: User ID to filter tickers by
     """
     try:
-        tickers, total_count = repo.get_all(page=1, page_size=1)
+        tickers, total_count = repo.get_all(page=1, page_size=1, user_id=user_id)
         
         st.metric("Total Active Tickers", format_count(total_count))
         

@@ -1,4 +1,4 @@
-"""Configuration settings for the stock screener application."""
+"""Updated configuration settings for yfinance migration."""
 
 import os
 from pathlib import Path
@@ -21,7 +21,7 @@ MIN_TICKER_LENGTH = 1
 MAX_BULK_INSERT_SIZE = 1000
 
 # API settings (yfinance - no key required!)
-# Removed FMP settings as yfinance is free and unlimited
+# Note: FMP settings removed, yfinance is free and unlimited
 
 # Cache settings
 CACHE_EXPIRY_HOURS = 24  # Only for today's data

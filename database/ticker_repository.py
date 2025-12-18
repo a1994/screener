@@ -14,51 +14,55 @@ logger = logging.getLogger(__name__)
 class TickerRepository:
     """Repository for ticker CRUD operations."""
     
-    def add_ticker(self, symbol: str) -> Optional[int]:
+    def add_ticker(self, symbol: str, user_id: int = 1) -> Optional[int]:
         """
-        Insert single ticker or reactivate if it exists but is inactive.
+        Insert single ticker or reactivate if it exists but is inactive for the user.
         
         Args:
             symbol: Ticker symbol (normalized)
+            user_id: User ID who owns this ticker
             
         Returns:
-            ticker_id of inserted/reactivated record, or None if ticker already active
+            ticker_id of inserted/reactivated record, or None if ticker already active for this user
         """
         with get_db_connection() as conn:
-            # Check if ticker exists (active or inactive)
+            # Check if ticker exists for this user (active or inactive)
             row = conn.execute(
-                "SELECT id, is_active FROM tickers WHERE symbol = ?",
-                (symbol,)
+                "SELECT id, is_active FROM tickers WHERE symbol = ? AND user_id = ?",
+                (symbol, user_id)
             ).fetchone()
             
             if row:
                 ticker_id, is_active = row['id'], row['is_active']
                 if is_active == 1:
-                    # Already active
-                    logger.debug(f"Ticker {symbol} already exists and is active")
+                    # Already active for this user
+                    logger.debug(f"Ticker {symbol} already exists and is active for user {user_id}")
                     return None
                 else:
-                    # Reactivate inactive ticker
+                    # Reactivate inactive ticker for this user
                     conn.execute(
                         "UPDATE tickers SET is_active = 1, added_date = ? WHERE id = ?",
                         (datetime.now().isoformat(), ticker_id)
                     )
-                    logger.info(f"Reactivated ticker {symbol} (ID: {ticker_id})")
+                    logger.info(f"Reactivated ticker {symbol} for user {user_id} (ID: {ticker_id})")
                     return ticker_id
             else:
-                # Insert new ticker
+                # Insert new ticker for this user
                 cursor = conn.execute(
-                    "INSERT INTO tickers (symbol) VALUES (?)",
-                    (symbol,)
+                    "INSERT INTO tickers (symbol, user_id) VALUES (?, ?)",
+                    (symbol, user_id)
                 )
-                return cursor.lastrowid
+                ticker_id = cursor.lastrowid
+                logger.info(f"Added new ticker {symbol} for user {user_id} (ID: {ticker_id})")
+                return ticker_id
     
-    def bulk_add(self, symbols: List[str], generate_alerts: bool = True) -> Dict[str, Any]:
+    def bulk_add(self, symbols: List[str], user_id: int = 1, generate_alerts: bool = True) -> Dict[str, Any]:
         """
-        Insert multiple tickers.
+        Insert multiple tickers for a specific user.
         
         Args:
             symbols: List of ticker symbols (normalized)
+            user_id: User ID who owns these tickers
             generate_alerts: If True, trigger background alert generation for new tickers
             
         Returns:
@@ -75,18 +79,18 @@ class TickerRepository:
         with get_db_connection() as conn:
             for symbol in symbols:
                 try:
-                    # Check if ticker exists (active or inactive)
+                    # Check if ticker exists for this user (active or inactive)
                     row = conn.execute(
-                        "SELECT id, is_active FROM tickers WHERE symbol = ?",
-                        (symbol,)
+                        "SELECT id, is_active FROM tickers WHERE symbol = ? AND user_id = ?",
+                        (symbol, user_id)
                     ).fetchone()
                     
                     if row:
                         ticker_id, is_active = row['id'], row['is_active']
                         if is_active == 1:
-                            # Already active, skip
+                            # Already active for this user, skip
                             failed += 1
-                            logger.debug(f"Ticker {symbol} already exists and is active")
+                            logger.debug(f"Ticker {symbol} already exists and is active for user {user_id}")
                         else:
                             # Reactivate inactive ticker
                             conn.execute(
@@ -98,19 +102,19 @@ class TickerRepository:
                                 'id': ticker_id,
                                 'symbol': symbol
                             })
-                            logger.info(f"Reactivated ticker {symbol} (ID: {ticker_id})")
+                            logger.info(f"Reactivated ticker {symbol} for user {user_id} (ID: {ticker_id})")
                     else:
-                        # Insert new ticker
+                        # Insert new ticker for this user
                         cursor = conn.execute(
-                            "INSERT INTO tickers (symbol) VALUES (?)",
-                            (symbol,)
+                            "INSERT INTO tickers (symbol, user_id) VALUES (?, ?)",
+                            (symbol, user_id)
                         )
                         added += 1
                         new_tickers.append({
                             'id': cursor.lastrowid,
                             'symbol': symbol
                         })
-                        logger.info(f"Added new ticker {symbol} (ID: {cursor.lastrowid})")
+                        logger.info(f"Added new ticker {symbol} for user {user_id} (ID: {cursor.lastrowid})")
                 except Exception as e:
                     failed += 1
                     error_msg = f"{symbol}: {str(e)}"
@@ -134,11 +138,11 @@ class TickerRepository:
             """Background task to generate alerts."""
             try:
                 # Import here to avoid circular dependency
-                from config.settings import FMP_API_KEY, DATABASE_PATH
+                from config.settings import DATABASE_PATH
                 from alerts.generator import AlertGenerator
                 from database.alert_repository import AlertRepository
                 
-                generator = AlertGenerator(FMP_API_KEY)
+                generator = AlertGenerator()
                 alert_repo = AlertRepository(DATABASE_PATH)
                 
                 for ticker in tickers:
@@ -174,13 +178,14 @@ class TickerRepository:
         thread = threading.Thread(target=generate_alerts, daemon=True)
         thread.start()
     
-    def get_all(self, page: int = 1, page_size: int = 50, 
+    def get_all(self, user_id: int = 1, page: int = 1, page_size: int = 50, 
                 sort_by: str = 'symbol', sort_dir: str = 'ASC',
                 search_query: Optional[str] = None) -> Tuple[List[Dict], int]:
         """
-        Get paginated tickers with sorting.
+        Get paginated tickers with sorting for a specific user.
         
         Args:
+            user_id: User ID to filter tickers by
             page: Page number (1-indexed)
             page_size: Number of records per page
             sort_by: Column to sort by ('symbol' or 'added_date')
@@ -199,9 +204,9 @@ class TickerRepository:
             sort_dir = 'ASC'
         
         with get_db_connection() as conn:
-            # Build query
-            where_clause = "WHERE is_active = 1"
-            params = []
+            # Build query with user filter
+            where_clause = "WHERE is_active = 1 AND user_id = ?"
+            params = [user_id]
             
             if search_query:
                 where_clause += " AND symbol LIKE ?"
@@ -236,12 +241,13 @@ class TickerRepository:
             
             return result, total_count
     
-    def search(self, query: str, page: int = 1, page_size: int = 50) -> Tuple[List[Dict], int]:
+    def search(self, query: str, user_id: int = 1, page: int = 1, page_size: int = 50) -> Tuple[List[Dict], int]:
         """
-        Search tickers by symbol (case-insensitive).
+        Search tickers by symbol (case-insensitive) for a specific user.
         
         Args:
             query: Search query
+            user_id: User ID to filter tickers by
             page: Page number
             page_size: Records per page
             
@@ -286,20 +292,21 @@ class TickerRepository:
             cursor = conn.execute(query, ticker_ids)
             return cursor.rowcount
     
-    def get_by_symbol(self, symbol: str) -> Optional[Dict]:
+    def get_by_symbol(self, symbol: str, user_id: int = 1) -> Optional[Dict]:
         """
-        Get ticker by symbol.
+        Get ticker by symbol for a specific user.
         
         Args:
             symbol: Ticker symbol
+            user_id: User ID to filter by
             
         Returns:
-            Ticker dict or None if not found
+            Ticker dict or None if not found for this user
         """
         with get_db_connection() as conn:
             row = conn.execute(
-                "SELECT id, symbol, added_date, last_updated FROM tickers WHERE symbol = ? AND is_active = 1",
-                (symbol,)
+                "SELECT id, symbol, added_date, last_updated FROM tickers WHERE symbol = ? AND user_id = ? AND is_active = 1",
+                (symbol, user_id)
             ).fetchone()
             
             if row:
@@ -311,16 +318,20 @@ class TickerRepository:
                 }
             return None
     
-    def get_active_tickers(self) -> List[str]:
+    def get_active_tickers(self, user_id: int = 1) -> List[str]:
         """
-        Get list of all active ticker symbols.
+        Get list of all active ticker symbols for a specific user.
+        
+        Args:
+            user_id: User ID to filter by
         
         Returns:
-            List of ticker symbols
+            List of ticker symbols for this user
         """
         with get_db_connection() as conn:
             rows = conn.execute(
-                "SELECT symbol FROM tickers WHERE is_active = 1 ORDER BY symbol ASC"
+                "SELECT symbol FROM tickers WHERE is_active = 1 AND user_id = ? ORDER BY symbol ASC",
+                (user_id,)
             ).fetchall()
             return [row['symbol'] for row in rows]
     

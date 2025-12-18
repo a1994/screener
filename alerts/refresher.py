@@ -18,7 +18,6 @@ class AlertRefresher:
     
     def __init__(
         self, 
-        api_key: str,
         db_path: str,
         rate_limit_ms: int = 500
     ):
@@ -26,25 +25,26 @@ class AlertRefresher:
         Initialize the AlertRefresher.
         
         Args:
-            api_key: Financial Modeling Prep API key
             db_path: Path to the SQLite database
-            rate_limit_ms: Milliseconds to wait between API calls (default 500)
+            rate_limit_ms: Milliseconds to wait between API calls (default 500) - not needed for yfinance
         """
-        self.generator = AlertGenerator(api_key)
+        self.generator = AlertGenerator()
         self.alert_repository = AlertRepository(db_path)
         self.ticker_repository = TickerRepository()
         self.rate_limit_ms = rate_limit_ms
     
     def refresh_all(
         self, 
-        progress_callback: Optional[Callable[[int, int, str], None]] = None
+        progress_callback: Optional[Callable[[int, int, str], None]] = None,
+        user_id: Optional[int] = None
     ) -> Dict:
         """
-        Refresh alerts for all tickers with progress tracking.
+        Refresh alerts for tickers with progress tracking.
         
         Args:
             progress_callback: Optional callback function(current, total, ticker_symbol)
                               Called after each ticker is processed
+            user_id: Optional user ID to filter tickers by. If None, processes all users' tickers
                               
         Returns:
             Dictionary with refresh statistics:
@@ -54,8 +54,8 @@ class AlertRefresher:
                 - total_alerts: Total alerts generated
                 - errors: List of error dictionaries {ticker_symbol, error}
         """
-        # Get all tickers (without pagination by setting large page_size)
-        all_tickers, total_count = self.ticker_repository.get_all(page=1, page_size=10000)
+        # Get tickers (without pagination by setting large page_size)
+        all_tickers, total_count = self.ticker_repository.get_all(page=1, page_size=10000, user_id=user_id)
         total = len(all_tickers)
         
         if total == 0:

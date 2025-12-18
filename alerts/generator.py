@@ -7,7 +7,7 @@ from typing import List, Dict, Optional
 import pandas as pd
 from datetime import datetime
 
-from api.fmp_client import FMPClient
+from api import DataClient
 from api.cache_manager import CacheManager
 from indicators.calculator import IndicatorCalculator
 from indicators.signals import SignalGenerator
@@ -20,14 +20,13 @@ class AlertGenerator:
     Reuses existing signal generation logic and applies deduplication rules.
     """
     
-    def __init__(self, api_key: str):
+    def __init__(self):
         """
         Initialize the AlertGenerator.
         
-        Args:
-            api_key: Financial Modeling Prep API key
+        Note: No API key needed for yfinance.
         """
-        self.fmp_client = FMPClient(api_key)
+        self.data_client = DataClient()
         self.cache_manager = CacheManager()
         self.deduplicator = AlertDeduplicator()
     
@@ -60,7 +59,7 @@ class AlertGenerator:
                 df = cached_df
             else:
                 # Fetch from API
-                price_data = self.fmp_client.get_historical_prices(ticker_symbol)
+                price_data = self.data_client.get_historical_prices(ticker_symbol, period='max')
                 
                 if not price_data:
                     return {

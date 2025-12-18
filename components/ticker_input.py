@@ -10,12 +10,13 @@ from utils import parse_tickers, validate_ticker, normalize_ticker, check_duplic
 from config import MAX_BULK_INSERT_SIZE
 
 
-def render_ticker_input(repo: TickerRepository) -> None:
+def render_ticker_input(repo: TickerRepository, user_id: int = 1) -> None:
     """
     Render ticker input UI with multiple input methods.
     
     Args:
         repo: TickerRepository instance for database operations
+        user_id: User ID for whom to add tickers
     """
     st.subheader("Add Tickers")
     
@@ -23,21 +24,22 @@ def render_ticker_input(repo: TickerRepository) -> None:
     tab1, tab2, tab3 = st.tabs(["Manual Entry", "Comma-Separated", "CSV Upload"])
     
     with tab1:
-        _render_manual_entry(repo)
+        _render_manual_entry(repo, user_id)
     
     with tab2:
-        _render_comma_separated(repo)
+        _render_comma_separated(repo, user_id)
     
     with tab3:
-        _render_csv_upload(repo)
+        _render_csv_upload(repo, user_id)
 
 
-def _render_manual_entry(repo: TickerRepository) -> None:
+def _render_manual_entry(repo: TickerRepository, user_id: int) -> None:
     """
     Render manual single ticker entry.
     
     Args:
         repo: TickerRepository instance
+        user_id: User ID for whom to add ticker
     """
     with st.form("manual_ticker_form"):
         ticker_input = st.text_input(
@@ -56,15 +58,15 @@ def _render_manual_entry(repo: TickerRepository) -> None:
                 st.error(f"Invalid ticker: {error_msg}")
                 return
             
-            # Check if ticker already exists
-            existing = repo.get_by_symbol(ticker)
+            # Check if ticker already exists for this user
+            existing = repo.get_by_symbol(ticker, user_id)
             if existing:
-                st.warning(f"Ticker {ticker} already exists in the database")
+                st.warning(f"Ticker {ticker} already exists for this user")
                 return
             
-            # Add ticker
+            # Add ticker for this user
             try:
-                ticker_id = repo.add_ticker(ticker)
+                ticker_id = repo.add_ticker(ticker, user_id)
                 if ticker_id:
                     st.success(f"✅ Added ticker: {ticker}")
                     # Trigger page rerun to refresh ticker dropdowns across all tabs
@@ -75,12 +77,13 @@ def _render_manual_entry(repo: TickerRepository) -> None:
                 st.error(f"Error adding ticker: {str(e)}")
 
 
-def _render_comma_separated(repo: TickerRepository) -> None:
+def _render_comma_separated(repo: TickerRepository, user_id: int) -> None:
     """
     Render comma-separated bulk ticker entry.
     
     Args:
         repo: TickerRepository instance
+        user_id: User ID for whom to add tickers
     """
     with st.form("bulk_ticker_form"):
         ticker_input = st.text_area(
@@ -126,8 +129,8 @@ def _render_comma_separated(repo: TickerRepository) -> None:
                 st.error("No valid tickers to add")
                 return
             
-            # Check for duplicates
-            existing_symbols = [t['symbol'] for t in repo.get_all()[0]]
+            # Check for duplicates for this user
+            existing_symbols = [t['symbol'] for t in repo.get_all(user_id)[0]]
             new_tickers, existing_tickers = check_duplicates(valid_tickers, existing_symbols)
             
             if existing_tickers:
@@ -137,9 +140,9 @@ def _render_comma_separated(repo: TickerRepository) -> None:
                 st.warning("All tickers already exist in database")
                 return
             
-            # Bulk add
+            # Bulk add for this user
             try:
-                result = repo.bulk_add(new_tickers)
+                result = repo.bulk_add(new_tickers, user_id)
                 
                 if result['added'] > 0:
                     st.success(f"✅ Added {result['added']} ticker(s)")
@@ -159,12 +162,13 @@ def _render_comma_separated(repo: TickerRepository) -> None:
                 st.error(f"Error adding tickers: {str(e)}")
 
 
-def _render_csv_upload(repo: TickerRepository) -> None:
+def _render_csv_upload(repo: TickerRepository, user_id: int) -> None:
     """
     Render CSV file upload for bulk ticker entry.
     
     Args:
         repo: TickerRepository instance
+        user_id: User ID for whom to add tickers
     """
     st.write("Upload a CSV file with ticker symbols. The file should have a column named 'symbol' or 'ticker'.")
     
@@ -233,8 +237,8 @@ def _render_csv_upload(repo: TickerRepository) -> None:
                     st.error("No valid tickers to add")
                     return
                 
-                # Check for duplicates
-                existing_symbols = [t['symbol'] for t in repo.get_all()[0]]
+                # Check for duplicates for this user
+                existing_symbols = [t['symbol'] for t in repo.get_all(user_id)[0]]
                 new_tickers, existing_tickers = check_duplicates(valid_tickers, existing_symbols)
                 
                 if existing_tickers:
@@ -244,9 +248,9 @@ def _render_csv_upload(repo: TickerRepository) -> None:
                     st.warning("All tickers already exist in database")
                     return
                 
-                # Bulk add
+                # Bulk add for this user
                 try:
-                    result = repo.bulk_add(new_tickers)
+                    result = repo.bulk_add(new_tickers, user_id)
                     
                     if result['added'] > 0:
                         st.success(f"✅ Added {result['added']} ticker(s)")

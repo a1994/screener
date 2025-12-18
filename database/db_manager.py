@@ -54,24 +54,122 @@ class DatabaseManager:
             if conn:
                 conn.close()
     
+    def _migrate_database(self, conn):
+        """Migrate existing database to support user system."""
+        try:
+            # Check if user_id column exists in tickers table
+            cursor = conn.cursor()
+            cursor.execute("PRAGMA table_info(tickers)")
+            columns = [column[1] for column in cursor.fetchall()]
+            
+            if 'user_id' not in columns:
+                logger.info("Migrating database to support multi-user system...")
+                
+                # Check if tickers table has existing data
+                cursor.execute("SELECT COUNT(*) FROM tickers")
+                existing_count = cursor.fetchone()[0]
+                
+                if existing_count > 0:
+                    logger.info(f"Found {existing_count} existing tickers, migrating...")
+                    
+                    # Create backup of existing data
+                    cursor.execute("""
+                        CREATE TEMP TABLE tickers_backup AS 
+                        SELECT * FROM tickers
+                    """)
+                    
+                    # Drop the existing table
+                    cursor.execute("DROP TABLE tickers")
+                    
+                    # Create new table with proper schema (will be created in init_db)
+                    # For now, just add the user_id column with proper handling
+                    cursor.execute("""
+                        CREATE TABLE tickers (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            symbol TEXT NOT NULL,
+                            user_id INTEGER NOT NULL DEFAULT 1,
+                            added_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+                            last_updated DATETIME,
+                            is_active BOOLEAN DEFAULT 1,
+                            UNIQUE(symbol, user_id)
+                        )
+                    """)
+                    
+                    # Migrate data back, assigning all existing tickers to user_id = 1
+                    cursor.execute("""
+                        INSERT INTO tickers (id, symbol, added_date, last_updated, is_active, user_id)
+                        SELECT id, symbol, added_date, last_updated, is_active, 1 
+                        FROM tickers_backup
+                    """)
+                    
+                    logger.info("Data migration completed successfully")
+                else:
+                    # No existing data, just add the column
+                    conn.execute("ALTER TABLE tickers ADD COLUMN user_id INTEGER NOT NULL DEFAULT 1")
+                
+                # Create indexes
+                conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_tickers_user_id 
+                    ON tickers(user_id)
+                """)
+                
+                logger.info("Database migration completed successfully")
+                
+        except Exception as e:
+            logger.error(f"Migration error: {e}")
+            # Continue with initialization even if migration fails
+    
     def init_db(self):
         """Initialize database with schema."""
         with self.get_connection() as conn:
-            # Create tickers table
+            # Run migrations first
+            self._migrate_database(conn)
+            # Create users table
             conn.execute("""
-                CREATE TABLE IF NOT EXISTS tickers (
+                CREATE TABLE IF NOT EXISTS users (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    symbol TEXT UNIQUE NOT NULL,
-                    added_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    last_updated DATETIME,
+                    username TEXT UNIQUE NOT NULL,
+                    display_name TEXT NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     is_active BOOLEAN DEFAULT 1
                 )
             """)
             
+            # Create default admin user if no users exist
+            conn.execute("""
+                INSERT OR IGNORE INTO users (id, username, display_name) 
+                VALUES (1, 'admin', 'Default User')
+            """)
+            
+            # Create tickers table with user_id
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS tickers (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    symbol TEXT NOT NULL,
+                    user_id INTEGER NOT NULL DEFAULT 1,
+                    added_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    last_updated DATETIME,
+                    is_active BOOLEAN DEFAULT 1,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                    UNIQUE(symbol, user_id)
+                )
+            """)
+            
+            # Create indexes for users
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_users_username 
+                ON users(username)
+            """)
+            
             # Create indexes for tickers
             conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_tickers_symbol 
-                ON tickers(symbol)
+                CREATE INDEX IF NOT EXISTS idx_tickers_symbol_user 
+                ON tickers(symbol, user_id)
+            """)
+            
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_tickers_user_id 
+                ON tickers(user_id)
             """)
             
             conn.execute("""
