@@ -43,38 +43,51 @@ def render_user_selector() -> int:
         st.error("No users found! Please restart the application.")
         return 1
     
-    # Create two columns for user management in top right
-    col1, col2, col3 = st.columns([6, 2, 2])
-    
-    with col3:  # Right-most column for user controls
+    # Use container with proper width management
+    with st.container():
+        # User management area with fixed positioning
         st.markdown("""
-        <style>
-        .user-selector {
-            text-align: right;
-            padding: 10px 0;
-        }
-        </style>
+        <div style="
+            position: relative; 
+            width: 100%; 
+            display: flex; 
+            justify-content: flex-end; 
+            align-items: center; 
+            gap: 15px; 
+            padding: 10px 20px 10px 0;
+            margin-bottom: 20px;
+        ">
+        </div>
         """, unsafe_allow_html=True)
         
-        # User dropdown
-        user_options = {user['id']: user['display_name'] for user in users}
-        current_user = st.selectbox(
-            "👤 User:",
-            options=list(user_options.keys()),
-            format_func=lambda x: user_options[x],
-            index=list(user_options.keys()).index(st.session_state.current_user_id) if st.session_state.current_user_id in user_options else 0,
-            key="user_selector",
-            help="Select active user - only their tickers will be shown"
-        )
+        # Create two columns with better spacing
+        col1, col2 = st.columns([7, 3])
         
-        # Update session state when user changes
-        if current_user != st.session_state.current_user_id:
-            st.session_state.current_user_id = current_user
-            st.rerun()  # Refresh the app with new user context
-    
-    with col2:  # Add user button
-        if st.button("➕ Add User", help="Create a new user", key="user_add_btn"):
-            st.session_state.show_add_user_form = True
+        with col1:
+            # User dropdown aligned to the right
+            user_options = {user['id']: user['display_name'] for user in users}
+            current_user = st.selectbox(
+                "👤 User:",
+                options=list(user_options.keys()),
+                format_func=lambda x: user_options[x],
+                index=list(user_options.keys()).index(st.session_state.current_user_id) if st.session_state.current_user_id in user_options else 0,
+                key="user_selector",
+                help="Select active user - only their tickers will be shown"
+            )
+            
+            # Update session state when user changes
+            if current_user != st.session_state.current_user_id:
+                st.session_state.current_user_id = current_user
+                st.rerun()  # Refresh the app with new user context
+        
+        with col2:
+            st.write("")  # Add spacing
+            # Create user button with compact styling
+            if st.button("+ Add User", 
+                        help="Create a new user account", 
+                        key="user_add_btn"):
+                st.session_state.show_add_user_form = True
+                st.rerun()
     
     # Show add user form if triggered
     if st.session_state.get('show_add_user_form', False):

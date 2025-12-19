@@ -140,6 +140,36 @@ def main():
         padding: 1rem 0;
     }
     
+    /* User management visibility fixes */
+    .user-controls {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        z-index: 1000;
+        padding-right: 20px !important;
+        margin-right: 20px !important;
+    }
+    
+    /* Ensure buttons are always visible */
+    .stButton > button {
+        visibility: visible !important;
+        display: block !important;
+        opacity: 1 !important;
+        z-index: 999 !important;
+        white-space: nowrap !important;
+        overflow: visible !important;
+    }
+    
+    /* Prevent text cropping */
+    .main .block-container {
+        padding-right: 3rem !important;
+    }
+    
+    /* Ensure proper spacing for user management area */
+    .stSelectbox, .stButton {
+        margin-right: 10px !important;
+    }
+    
     /* Dark theme improvements */
     .stApp {
         background-color: #0E1117;

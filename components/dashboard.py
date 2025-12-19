@@ -394,7 +394,7 @@ def render_dashboard(repo: TickerRepository, user_id: int = 1) -> None:
             
             with col1:
                 is_selected = st.checkbox(
-                    "", 
+                    f"Select {row['symbol']}", 
                     key=f"select_{row['id']}",
                     label_visibility="collapsed"
                 )
