@@ -141,6 +141,20 @@ class DatabaseManager:
                 VALUES (1, 'admin', 'Default User')
             """)
             
+            # Create themes table
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS themes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    name TEXT NOT NULL,
+                    description TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    is_active BOOLEAN DEFAULT 1,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                    UNIQUE(user_id, name)
+                )
+            """)
+            
             # Create tickers table with user_id
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS tickers (
@@ -161,6 +175,19 @@ class DatabaseManager:
                 ON users(username)
             """)
             
+            # Create ticker_themes junction table (many-to-many)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS ticker_themes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ticker_id INTEGER NOT NULL,
+                    theme_id INTEGER NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (ticker_id) REFERENCES tickers(id) ON DELETE CASCADE,
+                    FOREIGN KEY (theme_id) REFERENCES themes(id) ON DELETE CASCADE,
+                    UNIQUE(ticker_id, theme_id)
+                )
+            """)
+            
             # Create indexes for tickers
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_tickers_symbol_user 
@@ -175,6 +202,28 @@ class DatabaseManager:
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_tickers_is_active 
                 ON tickers(is_active)
+            """)
+            
+            # Create indexes for themes
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_themes_user_id 
+                ON themes(user_id)
+            """)
+            
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_themes_name 
+                ON themes(name)
+            """)
+            
+            # Create indexes for ticker_themes
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_ticker_themes_ticker_id 
+                ON ticker_themes(ticker_id)
+            """)
+            
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_ticker_themes_theme_id 
+                ON ticker_themes(theme_id)
             """)
             
             # Create price_cache table (for future use)

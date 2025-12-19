@@ -9,6 +9,7 @@ from database import TickerRepository
 from api import DataClient, CacheManager
 from indicators import IndicatorCalculator, SignalGenerator
 from charts import ChartRenderer
+from utils.mobile_responsive import mobile_friendly_columns, mobile_metric_card
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +62,10 @@ def render_chart_analysis(user_id: int = 1):
         # Load and display chart
         if load_button and selected_symbol:
             with st.spinner(f"Loading chart for {selected_symbol}..."):
+                # Add mobile-friendly container
+                st.markdown('<div class="mobile-scroll">', unsafe_allow_html=True)
                 _load_and_display_chart(selected_symbol, repo, date_range, user_id)
+                st.markdown('</div>', unsafe_allow_html=True)
         
         # Show instructions if no chart loaded
         if not load_button:
@@ -200,11 +204,24 @@ def _load_and_display_chart(symbol: str, repo: TickerRepository, date_range: str
         with st.spinner("Rendering chart..."):
             renderer = ChartRenderer(df_filtered, symbol)
             fig = renderer.render_full_chart()
-        
-        # Display chart
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # Display recent signals table (from filtered data)
+
+        # Display chart with standard configuration
+        st.plotly_chart(
+            fig, 
+            use_container_width=True,
+            config={
+                'displayModeBar': True,
+                'displaylogo': False,
+                'modeBarButtonsToRemove': ['pan2d', 'lasso2d', 'select2d'],
+                'toImageButtonOptions': {
+                    'format': 'png',
+                    'filename': f'{symbol}_chart',
+                    'height': 600,
+                    'width': 1000,
+                    'scale': 1
+                }
+            }
+        )        # Display recent signals table (from filtered data)
         _display_recent_signals(df_filtered, symbol)
         
     except Exception as e:
@@ -256,7 +273,7 @@ def _display_signal_metrics(signal_counts: dict):
 
 def _display_recent_signals(df: pd.DataFrame, symbol: str):
     """
-    Display table of recent signals.
+    Display table of recent signals with mobile optimization.
     
     Args:
         df: DataFrame with signals (filtered by date range)
@@ -275,6 +292,9 @@ def _display_recent_signals(df: pd.DataFrame, symbol: str):
     # Sort by date descending (latest first) - show ALL signals
     df_recent = df_signals.sort_values('date', ascending=False).copy()
     
+    # Add mobile-friendly table container
+    st.markdown('<div class="mobile-scroll">', unsafe_allow_html=True)
+    
     # Create display DataFrame
     display_df = pd.DataFrame({
         'Date': df_recent['date'].dt.strftime('%Y-%m-%d'),
@@ -285,9 +305,13 @@ def _display_recent_signals(df: pd.DataFrame, symbol: str):
         'Short CLOSE': df_recent['short_close'].map({True: '🔵', False: ''})
     })
     
-    # Display table
+    # Display table with mobile optimization
     st.dataframe(
         display_df,
         width='stretch',
-        hide_index=True
+        hide_index=True,
+        height=300  # Reduced height for mobile
     )
+    
+    # Close mobile-friendly container
+    st.markdown('</div>', unsafe_allow_html=True)

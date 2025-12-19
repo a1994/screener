@@ -36,7 +36,8 @@ class AlertRefresher:
     def refresh_all(
         self, 
         progress_callback: Optional[Callable[[int, int, str], None]] = None,
-        user_id: Optional[int] = None
+        user_id: Optional[int] = None,
+        theme_id: Optional[int] = None
     ) -> Dict:
         """
         Refresh alerts for tickers with progress tracking.
@@ -45,6 +46,7 @@ class AlertRefresher:
             progress_callback: Optional callback function(current, total, ticker_symbol)
                               Called after each ticker is processed
             user_id: Optional user ID to filter tickers by. If None, processes all users' tickers
+            theme_id: Optional theme ID to filter tickers by theme. If None, processes all tickers
                               
         Returns:
             Dictionary with refresh statistics:
@@ -55,7 +57,7 @@ class AlertRefresher:
                 - errors: List of error dictionaries {ticker_symbol, error}
         """
         # Get tickers (without pagination by setting large page_size)
-        all_tickers, total_count = self.ticker_repository.get_all(page=1, page_size=10000, user_id=user_id)
+        all_tickers, total_count = self.ticker_repository.get_all(page=1, page_size=10000, user_id=user_id, theme_id=theme_id)
         total = len(all_tickers)
         
         if total == 0:

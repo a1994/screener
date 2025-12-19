@@ -29,6 +29,12 @@ MAX_CACHE_AGE_DAYS = 365  # Clean up old cached data
 
 # Chart settings
 DEFAULT_CHART_PERIOD = '1y'  # Default chart period
+CHART_HEIGHT = 600
+CHART_WIDTH = 800
+
+# Mobile chart settings
+MOBILE_CHART_HEIGHT = 300
+MOBILE_CHART_WIDTH = 350
 
 # Technical indicator settings
 MACD_SETTINGS = {'fast': 12, 'slow': 26, 'signal': 9}
@@ -48,7 +54,7 @@ PAGE_CONFIG = {
     'page_title': APP_TITLE,
     'page_icon': APP_ICON,
     'layout': 'wide',
-    'initial_sidebar_state': 'expanded'
+    'initial_sidebar_state': 'collapsed'  # Start collapsed for mobile-friendly experience
 }
 
 # Date format

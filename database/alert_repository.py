@@ -26,7 +26,8 @@ class AlertRepository:
         page_size: int = 20, 
         sort_order: str = 'DESC',
         ticker_filter: Optional[str] = None,
-        user_id: Optional[int] = None
+        user_id: Optional[int] = None,
+        theme_id: Optional[int] = None
     ) -> List[Dict]:
         """
         Get all alerts with pagination, sorting, and optional filtering.
@@ -37,6 +38,7 @@ class AlertRepository:
             sort_order: Sort order for signal_date ('ASC' or 'DESC')
             ticker_filter: Optional ticker symbol filter (case-insensitive partial match)
             user_id: Optional user ID to filter alerts by associated tickers
+            theme_id: Optional theme ID to filter alerts by tickers in specific theme
             
         Returns:
             List of alert dictionaries
@@ -64,8 +66,13 @@ class AlertRepository:
                     a.created_at
                 FROM alerts a
                 INNER JOIN tickers t ON a.ticker_id = t.id
-                WHERE t.is_active = 1
             """
+            
+            # Add theme join if theme filtering is needed
+            if theme_id is not None:
+                query += " INNER JOIN ticker_themes tt ON t.id = tt.ticker_id"
+            
+            query += " WHERE t.is_active = 1"
             
             params = []
             where_clauses = []
@@ -77,6 +84,10 @@ class AlertRepository:
             if ticker_filter:
                 where_clauses.append("a.ticker_symbol LIKE ?")
                 params.append(f"%{ticker_filter}%")
+            
+            if theme_id is not None:
+                where_clauses.append("tt.theme_id = ?")
+                params.append(theme_id)
             
             if where_clauses:
                 query += " AND " + " AND ".join(where_clauses)
@@ -92,13 +103,14 @@ class AlertRepository:
         finally:
             conn.close()
     
-    def get_total_count(self, ticker_filter: Optional[str] = None, user_id: Optional[int] = None) -> int:
+    def get_total_count(self, ticker_filter: Optional[str] = None, user_id: Optional[int] = None, theme_id: Optional[int] = None) -> int:
         """
         Get total count of alerts, optionally filtered.
         
         Args:
             ticker_filter: Optional ticker symbol filter (case-insensitive partial match)
             user_id: Optional user ID to filter alerts by associated tickers
+            theme_id: Optional theme ID to filter alerts by tickers in specific theme
             
         Returns:
             Total number of alerts matching the filter
@@ -111,8 +123,13 @@ class AlertRepository:
             query = """
                 SELECT COUNT(*) FROM alerts a
                 INNER JOIN tickers t ON a.ticker_id = t.id
-                WHERE t.is_active = 1
             """
+            
+            # Add theme join if theme filtering is needed
+            if theme_id is not None:
+                query += " INNER JOIN ticker_themes tt ON t.id = tt.ticker_id"
+            
+            query += " WHERE t.is_active = 1"
             
             params = []
             where_clauses = []
@@ -124,6 +141,10 @@ class AlertRepository:
             if ticker_filter:
                 where_clauses.append("a.ticker_symbol LIKE ?")
                 params.append(f"%{ticker_filter}%")
+            
+            if theme_id is not None:
+                where_clauses.append("tt.theme_id = ?")
+                params.append(theme_id)
             
             if where_clauses:
                 query += " AND " + " AND ".join(where_clauses)

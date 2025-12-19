@@ -18,11 +18,10 @@ from components.alerts_tab import render_alerts_tab
 from components.user_management import render_user_selector, render_user_info_sidebar, get_current_user_id, initialize_user_system
 
 
+
+
 def init_app() -> None:
     """Initialize the application and database."""
-    # Configure page
-    st.set_page_config(**PAGE_CONFIG)
-    
     # Initialize database
     db_path = Path(DATABASE_PATH)
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -107,6 +106,52 @@ def main():
     # Initialize app
     init_app()
     
+    # Add full-width CSS to eliminate black spaces
+    st.markdown("""
+    <style>
+    /* Remove default Streamlit padding and margins */
+    .main > div {
+        max-width: 100%;
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+    
+    /* Full width container */
+    .stApp > .main {
+        max-width: 100%;
+    }
+    
+    /* Remove default container constraints */
+    .block-container {
+        max-width: 100%;
+        padding-top: 1rem;
+        padding-bottom: 1rem;
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+    
+    /* Ensure tabs use full width */
+    .stTabs {
+        width: 100%;
+    }
+    
+    /* Full width for tab content */
+    .stTabContent {
+        padding: 1rem 0;
+    }
+    
+    /* Dark theme improvements */
+    .stApp {
+        background-color: #0E1117;
+    }
+    
+    /* Remove sidebar padding when collapsed */
+    .css-1d391kg {
+        padding-left: 1rem;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
     # Render user selector in top-right area
     current_user_id = render_user_selector()
     
@@ -136,12 +181,6 @@ def main():
     with tab3:
         try:
             repo = TickerRepository()
-            
-            # Add ticker section (collapsible)
-            with st.expander("➕ Add Tickers", expanded=False):
-                render_ticker_input(repo, user_id=current_user_id)
-            
-            st.markdown("---")
             
             # Dashboard (user-specific)
             render_dashboard(repo, user_id=current_user_id)

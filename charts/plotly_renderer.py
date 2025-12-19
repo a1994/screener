@@ -38,8 +38,8 @@ class ChartRenderer:
         fig = make_subplots(
             rows=2, cols=1,
             shared_xaxes=True,
-            vertical_spacing=0.03,
-            row_heights=[0.7, 0.3],
+            vertical_spacing=0.05,
+            row_heights=[0.75, 0.25],
             subplot_titles=(f'{self.symbol} - Price & Indicators', 'Volume')
         )
         
@@ -101,8 +101,9 @@ class ChartRenderer:
                         x=self.df['date'],
                         y=self.df[ema_col],
                         name=f'EMA {period}',
-                        line=dict(color=color, width=1.5),
-                        opacity=0.8
+                        line=dict(color=color, width=2),
+                        opacity=0.9,
+                        showlegend=True
                     ),
                     row=1, col=1
                 )
@@ -116,7 +117,8 @@ class ChartRenderer:
                     y=self.df['gann_hilo'],
                     name='Gann HiLo',
                     line=dict(color='#00BCD4', width=2, dash='dash'),
-                    opacity=0.7
+                    opacity=0.8,
+                    showlegend=True
                 ),
                 row=1, col=1
             )
@@ -270,7 +272,12 @@ class ChartRenderer:
     def _add_volume(self, fig: go.Figure):
         """Add volume subplot with MA and cloud."""
         if 'volume' not in self.df.columns:
-            return
+            # Add placeholder volume if missing
+            logger.warning(f"No volume data for {self.symbol}, adding placeholder")
+            self.df['volume'] = 1000000  # Default volume
+        
+        # Ensure volume is not zero (some data sources have zero volume)
+        self.df['volume'] = self.df['volume'].replace(0, 1000)
         
         # Color volume bars by price change
         colors = ['#ef5350' if row['close'] < row['open'] else '#26a69a' 
@@ -283,8 +290,9 @@ class ChartRenderer:
                 y=self.df['volume'],
                 name='Volume',
                 marker_color=colors,
-                opacity=0.7,
-                showlegend=False
+                opacity=0.8,
+                showlegend=False,
+                hovertemplate='<b>%{x}</b><br>Volume: %{y:,.0f}<extra></extra>'
             ),
             row=2, col=1
         )
@@ -308,20 +316,38 @@ class ChartRenderer:
         fig.update_layout(
             title=dict(
                 text=f'{self.symbol} - Technical Analysis',
-                font=dict(size=20, color='#333')
+                font=dict(size=20, color='#333'),
+                x=0.5
             ),
             xaxis_rangeslider_visible=False,
             hovermode='x unified',
-            height=800,
+            height=600,
             template='plotly_white',
             showlegend=True,
             legend=dict(
                 orientation='h',
                 yanchor='bottom',
                 y=1.02,
-                xanchor='right',
-                x=1
-            )
+                xanchor='center',
+                x=0.5,
+                font=dict(size=12)
+            ),
+            margin=dict(l=60, r=60, t=80, b=60),
+            font=dict(size=12),
+            autosize=True
+        )
+        
+        # Add mobile-responsive legend configuration via JavaScript
+        # This will be applied by the browser based on screen size
+        fig.add_annotation(
+            text="",  # Empty text, just used to inject mobile CSS
+            showarrow=False,
+            xref="paper", yref="paper",
+            x=0, y=0,
+            xanchor="left", yanchor="bottom",
+            font=dict(size=1, color="rgba(0,0,0,0)"),  # Invisible
+            bgcolor="rgba(0,0,0,0)",  # Transparent
+            bordercolor="rgba(0,0,0,0)"  # Transparent
         )
         
         # Remove non-trading days (weekends) from both x-axes to make chart smooth

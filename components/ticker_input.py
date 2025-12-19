@@ -5,14 +5,15 @@ import pandas as pd
 from typing import List, Tuple, Optional
 from io import StringIO
 
-from database import TickerRepository, get_db_connection
+from database import TickerRepository, ThemeRepository, get_db_connection
 from utils import parse_tickers, validate_ticker, normalize_ticker, check_duplicates
+from utils.mobile_responsive import mobile_friendly_columns, mobile_friendly_form
 from config import MAX_BULK_INSERT_SIZE
 
 
 def render_ticker_input(repo: TickerRepository, user_id: int = 1) -> None:
     """
-    Render ticker input UI with multiple input methods.
+    Render ticker input UI with multiple input methods and theme selection.
     
     Args:
         repo: TickerRepository instance for database operations
@@ -20,26 +21,123 @@ def render_ticker_input(repo: TickerRepository, user_id: int = 1) -> None:
     """
     st.subheader("Add Tickers")
     
+    # Initialize theme repository
+    theme_repo = ThemeRepository()
+    
+    # Theme selection (required for all input methods)
+    selected_theme_id = _render_theme_selector(theme_repo, user_id)
+    
+    if selected_theme_id is None:
+        st.warning("⚠️ Please select or create a theme before adding tickers in Theme Management section below.")
+        return
+    
     # Create tabs for different input methods
     tab1, tab2, tab3 = st.tabs(["Manual Entry", "Comma-Separated", "CSV Upload"])
     
     with tab1:
-        _render_manual_entry(repo, user_id)
+        _render_manual_entry(repo, theme_repo, user_id, selected_theme_id)
     
     with tab2:
-        _render_comma_separated(repo, user_id)
+        _render_comma_separated(repo, theme_repo, user_id, selected_theme_id)
     
     with tab3:
-        _render_csv_upload(repo, user_id)
+        _render_csv_upload(repo, theme_repo, user_id, selected_theme_id)
 
 
-def _render_manual_entry(repo: TickerRepository, user_id: int) -> None:
+def _render_theme_selector(theme_repo: ThemeRepository, user_id: int) -> Optional[int]:
     """
-    Render manual single ticker entry.
+    Render theme selector with create new option.
+    
+    Args:
+        theme_repo: ThemeRepository instance
+        user_id: User ID
+        
+    Returns:
+        Selected theme ID or None if no theme selected
+    """
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        # Get user themes
+        user_themes = theme_repo.get_user_themes(user_id)
+        
+        # Create options for dropdown
+        theme_options = {"None": None}  # Default empty option
+        theme_options.update({theme['name']: theme['id'] for theme in user_themes})
+        theme_options["➕ Create New Theme"] = "CREATE_NEW"
+        
+        selected_option = st.selectbox(
+            "Select Theme *",
+            options=list(theme_options.keys()),
+            index=0,
+            help="Select an existing theme or create a new one. Required to add tickers.",
+            key="theme_selector"
+        )
+        
+        selected_theme_id = theme_options[selected_option]
+    
+    with col2:
+        if selected_theme_id == "CREATE_NEW":
+            if st.button("Create", key="ticker_input_create_theme_btn"):
+                st.session_state.show_create_theme = True
+    
+    # Handle new theme creation
+    if selected_theme_id == "CREATE_NEW" and st.session_state.get('show_create_theme', False):
+        with st.expander("Create New Theme", expanded=True):
+            with st.form("create_theme_form"):
+                new_theme_name = st.text_input(
+                    "Theme Name *",
+                    placeholder="e.g., Tech Stocks, Blue Chip, Growth Stocks"
+                )
+                new_theme_description = st.text_area(
+                    "Description (optional)",
+                    placeholder="Brief description of this theme",
+                    height=60
+                )
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    create_submitted = st.form_submit_button("✅ Create Theme", key="theme_create_submit")
+                with col2:
+                    create_cancelled = st.form_submit_button("❌ Cancel", key="theme_create_cancel")
+                
+                if create_submitted and new_theme_name.strip():
+                    theme_id = theme_repo.create_theme(
+                        user_id=user_id,
+                        name=new_theme_name.strip(),
+                        description=new_theme_description.strip() if new_theme_description.strip() else None
+                    )
+                    
+                    if theme_id:
+                        st.success(f"✅ Created theme: {new_theme_name}")
+                        st.session_state.show_create_theme = False
+                        st.session_state.selected_theme_id = theme_id
+                        st.rerun()
+                    else:
+                        st.error("❌ Theme name already exists or creation failed")
+                
+                if create_cancelled:
+                    st.session_state.show_create_theme = False
+                    st.rerun()
+        
+        return None  # No theme selected while creating
+    
+    # Return the selected theme ID from session state if available, otherwise from dropdown
+    if 'selected_theme_id' in st.session_state:
+        return st.session_state.selected_theme_id
+    
+    return selected_theme_id if selected_theme_id != "CREATE_NEW" else None
+
+
+def _render_manual_entry(repo: TickerRepository, theme_repo: ThemeRepository, user_id: int, theme_id: int) -> None:
+    """
+    Render manual single ticker entry with theme.
     
     Args:
         repo: TickerRepository instance
+        theme_repo: ThemeRepository instance
         user_id: User ID for whom to add ticker
+        theme_id: Theme ID to add ticker to
     """
     with st.form("manual_ticker_form"):
         ticker_input = st.text_input(
@@ -60,30 +158,66 @@ def _render_manual_entry(repo: TickerRepository, user_id: int) -> None:
             
             # Check if ticker already exists for this user
             existing = repo.get_by_symbol(ticker, user_id)
-            if existing:
-                st.warning(f"Ticker {ticker} already exists for this user")
-                return
+            ticker_id = None
             
-            # Add ticker for this user
+            if existing:
+                # Ticker exists, check if it's already in this theme
+                ticker_id = existing['id']
+                if theme_repo.is_ticker_in_theme(ticker_id, theme_id):
+                    st.warning(f"Ticker {ticker} is already in this theme")
+                    return
+                else:
+                    # Ticker exists but not in this theme, add it to theme
+                    # Debug info
+                    user_themes = theme_repo.get_user_themes(user_id)
+                    theme_name = next((t['name'] for t in user_themes if t['id'] == theme_id), f'Theme {theme_id}')
+                    
+                    if theme_repo.add_ticker_to_theme(ticker_id, theme_id):
+                        st.success(f"✅ Added existing ticker {ticker} to theme '{theme_name}'")
+                        # Clear session state for theme selection
+                        if 'selected_theme_id' in st.session_state:
+                            del st.session_state.selected_theme_id
+                        st.rerun()
+                    else:
+                        st.error(f"Failed to add ticker {ticker} (ID: {ticker_id}) to theme '{theme_name}' (ID: {theme_id})")
+                        # Additional debug info
+                        st.error("Please try refreshing the page or selecting the theme again.")
+                    return
+            
+            # Ticker doesn't exist, create it and add to theme
             try:
                 ticker_id = repo.add_ticker(ticker, user_id)
                 if ticker_id:
-                    st.success(f"✅ Added ticker: {ticker}")
-                    # Trigger page rerun to refresh ticker dropdowns across all tabs
-                    st.rerun()
+                    # Add ticker to theme
+                    # Debug info
+                    user_themes = theme_repo.get_user_themes(user_id)
+                    theme_name = next((t['name'] for t in user_themes if t['id'] == theme_id), f'Theme {theme_id}')
+                    
+                    if theme_repo.add_ticker_to_theme(ticker_id, theme_id):
+                        st.success(f"✅ Added new ticker: {ticker} to theme '{theme_name}'")
+                        # Clear session state for theme selection
+                        if 'selected_theme_id' in st.session_state:
+                            del st.session_state.selected_theme_id
+                        # Trigger page rerun to refresh ticker dropdowns across all tabs
+                        st.rerun()
+                    else:
+                        st.error(f"Failed to add ticker {ticker} (ID: {ticker_id}) to theme '{theme_name}' (ID: {theme_id})")
+                        st.error("Please try refreshing the page or selecting the theme again.")
                 else:
                     st.error(f"Failed to add ticker: {ticker}")
             except Exception as e:
                 st.error(f"Error adding ticker: {str(e)}")
 
 
-def _render_comma_separated(repo: TickerRepository, user_id: int) -> None:
+def _render_comma_separated(repo: TickerRepository, theme_repo: ThemeRepository, user_id: int, theme_id: int) -> None:
     """
-    Render comma-separated bulk ticker entry.
+    Render comma-separated bulk ticker entry with theme.
     
     Args:
         repo: TickerRepository instance
+        theme_repo: ThemeRepository instance
         user_id: User ID for whom to add tickers
+        theme_id: Theme ID to add tickers to
     """
     with st.form("bulk_ticker_form"):
         ticker_input = st.text_area(
@@ -145,7 +279,9 @@ def _render_comma_separated(repo: TickerRepository, user_id: int) -> None:
                 result = repo.bulk_add(new_tickers, user_id)
                 
                 if result['added'] > 0:
-                    st.success(f"✅ Added {result['added']} ticker(s)")
+                    # Add successfully added tickers to theme
+                    added_to_theme = _add_tickers_to_theme(repo, theme_repo, new_tickers, user_id, theme_id)
+                    st.success(f"✅ Added {result['added']} ticker(s) to theme ({added_to_theme} linked to theme)")
                 
                 if result['failed'] > 0:
                     st.warning(f"Failed to add {result['failed']} ticker(s)")
@@ -154,21 +290,54 @@ def _render_comma_separated(repo: TickerRepository, user_id: int) -> None:
                             for error in result['errors'][:10]:  # Show first 10
                                 st.text(f"  • {error}")
                 
-                # Trigger page rerun to refresh ticker dropdowns across all tabs
+                # Clear session state for theme selection and trigger page rerun
                 if result['added'] > 0:
+                    if 'selected_theme_id' in st.session_state:
+                        del st.session_state.selected_theme_id
                     st.rerun()
                 
             except Exception as e:
                 st.error(f"Error adding tickers: {str(e)}")
 
 
-def _render_csv_upload(repo: TickerRepository, user_id: int) -> None:
+def _add_tickers_to_theme(repo: TickerRepository, theme_repo: ThemeRepository, ticker_symbols: List[str], user_id: int, theme_id: int) -> int:
     """
-    Render CSV file upload for bulk ticker entry.
+    Helper function to add multiple tickers to a theme.
     
     Args:
         repo: TickerRepository instance
+        theme_repo: ThemeRepository instance
+        ticker_symbols: List of ticker symbols to add to theme
+        user_id: User ID
+        theme_id: Theme ID
+        
+    Returns:
+        Number of tickers successfully added to theme
+    """
+    added_to_theme = 0
+    
+    for symbol in ticker_symbols:
+        # Get ticker by symbol (normalize first to match what bulk_add creates)
+        normalized_symbol = normalize_ticker(symbol)
+        ticker = repo.get_by_symbol(normalized_symbol, user_id)
+        if ticker:
+            # Check if ticker is already in this theme
+            if not theme_repo.is_ticker_in_theme(ticker['id'], theme_id):
+                if theme_repo.add_ticker_to_theme(ticker['id'], theme_id):
+                    added_to_theme += 1
+    
+    return added_to_theme
+
+
+def _render_csv_upload(repo: TickerRepository, theme_repo: ThemeRepository, user_id: int, theme_id: int) -> None:
+    """
+    Render CSV file upload for bulk ticker entry with theme.
+    
+    Args:
+        repo: TickerRepository instance
+        theme_repo: ThemeRepository instance
         user_id: User ID for whom to add tickers
+        theme_id: Theme ID to add tickers to
     """
     st.write("Upload a CSV file with ticker symbols. The file should have a column named 'symbol' or 'ticker'.")
     
@@ -253,17 +422,21 @@ def _render_csv_upload(repo: TickerRepository, user_id: int) -> None:
                     result = repo.bulk_add(new_tickers, user_id)
                     
                     if result['added'] > 0:
-                        st.success(f"✅ Added {result['added']} ticker(s)")
+                        # Add successfully added tickers to theme
+                        added_to_theme = _add_tickers_to_theme(repo, theme_repo, new_tickers, user_id, theme_id)
+                        st.success(f"✅ Added {result['added']} ticker(s) from CSV to theme ({added_to_theme} linked to theme)")
                     
                     if result['failed'] > 0:
                         st.warning(f"Failed to add {result['failed']} ticker(s)")
                         if result['errors']:
                             with st.expander("View errors"):
-                                for error in result['errors'][:20]:
+                                for error in result['errors'][:10]:
                                     st.text(f"  • {error}")
                     
-                    # Trigger page rerun to refresh ticker dropdowns across all tabs
+                    # Clear session state for theme selection and trigger page rerun
                     if result['added'] > 0:
+                        if 'selected_theme_id' in st.session_state:
+                            del st.session_state.selected_theme_id
                         st.rerun()
                     
                 except Exception as e:

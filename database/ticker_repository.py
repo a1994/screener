@@ -180,7 +180,7 @@ class TickerRepository:
     
     def get_all(self, user_id: int = 1, page: int = 1, page_size: int = 50, 
                 sort_by: str = 'symbol', sort_dir: str = 'ASC',
-                search_query: Optional[str] = None) -> Tuple[List[Dict], int]:
+                search_query: Optional[str] = None, theme_id: Optional[int] = None) -> Tuple[List[Dict], int]:
         """
         Get paginated tickers with sorting for a specific user.
         
@@ -191,6 +191,7 @@ class TickerRepository:
             sort_by: Column to sort by ('symbol' or 'added_date')
             sort_dir: Sort direction ('ASC' or 'DESC')
             search_query: Optional symbol search filter
+            theme_id: Optional theme ID to filter tickers by theme
             
         Returns:
             Tuple of (rows, total_count)
@@ -204,26 +205,33 @@ class TickerRepository:
             sort_dir = 'ASC'
         
         with get_db_connection() as conn:
-            # Build query with user filter
-            where_clause = "WHERE is_active = 1 AND user_id = ?"
+            # Build base query
+            base_query = "SELECT t.id, t.symbol, t.added_date, t.last_updated FROM tickers t"
+            count_base = "SELECT COUNT(*) FROM tickers t"
+            
+            # Add theme join if needed
+            if theme_id is not None:
+                base_query += " INNER JOIN ticker_themes tt ON t.id = tt.ticker_id"
+                count_base += " INNER JOIN ticker_themes tt ON t.id = tt.ticker_id"
+            
+            # Build where clause
+            where_clause = "WHERE t.is_active = 1 AND t.user_id = ?"
             params = [user_id]
             
+            if theme_id is not None:
+                where_clause += " AND tt.theme_id = ?"
+                params.append(theme_id)
+            
             if search_query:
-                where_clause += " AND symbol LIKE ?"
+                where_clause += " AND t.symbol LIKE ?"
                 params.append(f"%{search_query}%")
             
             # Get total count
-            count_query = f"SELECT COUNT(*) FROM tickers {where_clause}"
+            count_query = f"{count_base} {where_clause}"
             total_count = conn.execute(count_query, params).fetchone()[0]
             
             # Get paginated results
-            query = f"""
-                SELECT id, symbol, added_date, last_updated
-                FROM tickers
-                {where_clause}
-                ORDER BY {sort_by} {sort_dir}
-                LIMIT ? OFFSET ?
-            """
+            query = f"{base_query} {where_clause} ORDER BY {sort_by} {sort_dir} LIMIT ? OFFSET ?"
             params.extend([page_size, offset])
             
             rows = conn.execute(query, params).fetchall()
