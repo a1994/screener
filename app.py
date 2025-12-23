@@ -106,6 +106,10 @@ def main():
     # Initialize app
     init_app()
     
+    # Initialize active tab in session state if not exists
+    if 'active_tab' not in st.session_state:
+        st.session_state.active_tab = "📈 Chart Analysis"
+    
     # Add full-width CSS to eliminate black spaces
     st.markdown("""
     <style>
@@ -198,6 +202,8 @@ def main():
     # Create tabs
     tab1, tab2, tab3 = st.tabs(["📈 Chart Analysis", "🔔 Alerts", "📋 Dashboard"])
     
+    # The tab objects handle the display automatically
+    # We just render the content, and rerun() will switch to the correct tab
     with tab1:
         render_chart_analysis(user_id=current_user_id)
     

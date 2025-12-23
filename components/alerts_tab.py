@@ -305,15 +305,34 @@ def _display_alert_table(alerts: list):
         signal_date = alert['signal_date']
         created_date = alert['created_at'][:16] if len(alert['created_at']) > 16 else alert['created_at']
         
-        st.markdown(f"""
-        <div class="alert-row">
-            <div class="ticker-cell">{alert['ticker_symbol']}</div>
-            <div class="alert-type">{type_display}</div>
-            <div class="date-cell">{signal_date}</div>
-            <div class="price-cell">{price_display}</div>
-            <div class="date-cell">{created_date}</div>
-        </div>
-        """, unsafe_allow_html=True)
+        # Create columns for the alert row with clickable ticker
+        alert_col1, alert_col2, alert_col3, alert_col4, alert_col5 = st.columns([1, 1.5, 1.5, 1, 1.2])
+        
+        with alert_col1:
+            # Make ticker clickable using Streamlit button
+            if st.button(
+                f"🎯 {alert['ticker_symbol']}",
+                key=f"ticker_btn_{alert['id']}",
+                help=f"Click to go to Chart Analysis for {alert['ticker_symbol']}"
+            ):
+                # Set session state to pre-select this ticker in Chart Analysis
+                st.session_state.selected_chart_ticker = alert['ticker_symbol']
+                st.session_state.chart_ticker_changed = True
+                # Show message to user
+                st.success(f"✅ Go to the **Chart Analysis** tab to see {alert['ticker_symbol']}")
+                st.rerun()
+        
+        with alert_col2:
+            st.markdown(f"<div style='padding: 8px; text-align: center;'>{type_display}</div>", unsafe_allow_html=True)
+        
+        with alert_col3:
+            st.markdown(f"<div style='padding: 8px; text-align: center;'>{signal_date}</div>", unsafe_allow_html=True)
+        
+        with alert_col4:
+            st.markdown(f"<div style='padding: 8px; text-align: center;'>{price_display}</div>", unsafe_allow_html=True)
+        
+        with alert_col5:
+            st.markdown(f"<div style='padding: 8px; text-align: center;'>{created_date}</div>", unsafe_allow_html=True)
     
     st.markdown('</div>', unsafe_allow_html=True)
 

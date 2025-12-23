@@ -40,10 +40,20 @@ def render_chart_analysis(user_id: int = 1):
         # Generate a unique key based on ticker count to force selectbox refresh
         ticker_key = f"ticker_select_{len(active_symbols)}"
         
+        # Check if a ticker was pre-selected from alerts page
+        default_ticker_index = 0
+        if (hasattr(st.session_state, 'selected_chart_ticker') and 
+            st.session_state.selected_chart_ticker in active_symbols):
+            try:
+                default_ticker_index = sorted(active_symbols).index(st.session_state.selected_chart_ticker)
+            except (ValueError, IndexError):
+                default_ticker_index = 0
+        
         with col1:
             selected_symbol = st.selectbox(
                 "Select Ticker",
                 options=sorted(active_symbols),
+                index=default_ticker_index,
                 key=ticker_key,
                 help="Choose a ticker to analyze"
             )
@@ -57,18 +67,25 @@ def render_chart_analysis(user_id: int = 1):
             )
         
         with col3:
+            # Auto-load chart if ticker was pre-selected from alerts
+            auto_load = (hasattr(st.session_state, 'chart_ticker_changed') and 
+                        st.session_state.chart_ticker_changed)
             load_button = st.button("📈 Load Chart", type="primary", key="chart_load_btn")
         
         # Load and display chart
-        if load_button and selected_symbol:
+        if (load_button or auto_load) and selected_symbol:
             with st.spinner(f"Loading chart for {selected_symbol}..."):
                 # Add mobile-friendly container
                 st.markdown('<div class="mobile-scroll">', unsafe_allow_html=True)
                 _load_and_display_chart(selected_symbol, repo, date_range, user_id)
                 st.markdown('</div>', unsafe_allow_html=True)
+            
+            # Clear the auto-load flag after loading
+            if auto_load:
+                st.session_state.chart_ticker_changed = False
         
         # Show instructions if no chart loaded
-        if not load_button:
+        if not load_button and not auto_load:
             st.markdown("""
             ### How to use:
             1. **Select a ticker** from the dropdown
