@@ -4,7 +4,8 @@ import streamlit as st
 import pandas as pd
 from typing import List, Dict, Any
 
-from database import TickerRepository, ThemeRepository
+from database import TickerRepository, ThemeRepository, UserRepository
+from services import StateManager
 from utils import format_datetime, format_count
 from utils.mobile_responsive import mobile_friendly_columns, mobile_metric_card, mobile_data_table
 from config import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
@@ -291,283 +292,363 @@ def render_dashboard(repo: TickerRepository, user_id: int = 1) -> None:
         
         if not tickers:
             st.info("No tickers found. Add some tickers to get started!")
-            return
         
-        # Convert to DataFrame for display
-        df = pd.DataFrame(tickers)
+        # Convert to DataFrame for display (skip if no tickers)
+        if tickers:
+            df = pd.DataFrame(tickers)
         
-        # Format dates
-        if 'created_at' in df.columns:
-            df['created_at'] = df['created_at'].apply(lambda x: format_datetime(x, 'N/A'))
-        if 'last_updated' in df.columns:
-            df['last_updated'] = df['last_updated'].apply(lambda x: format_datetime(x, 'N/A'))
-        
-        # Reorder columns to show themes after symbol
-        if 'themes' in df.columns:
-            cols = list(df.columns)
-            cols.remove('themes')
-            if 'symbol' in cols:
-                symbol_idx = cols.index('symbol')
-                cols.insert(symbol_idx + 1, 'themes')
-                df = df[cols]
-        
-        # Add selection column
-        df.insert(0, 'Select', False)
-        
-        # Display clean ticker table
-        st.markdown("## Ticker List")
-        
-        # Custom CSS for clean table design
-        st.markdown("""
-        <style>
-        .ticker-table {
-            width: 100%;
-            max-width: 100%;
-            margin-top: 1rem;
-        }
-        .ticker-row {
-            display: grid;
-            grid-template-columns: minmax(60px, 0.8fr) minmax(60px, 0.8fr) minmax(80px, 1fr) minmax(150px, 2fr) minmax(120px, 1.5fr) minmax(120px, 1.5fr);
-            gap: 1rem;
-            padding: 0.75rem 1rem;
-            border-bottom: 1px solid #333;
-            background: transparent;
-            color: white;
-            align-items: center;
-            width: 100%;
-        }
-        .ticker-header {
-            display: grid;
-            grid-template-columns: minmax(60px, 0.8fr) minmax(60px, 0.8fr) minmax(80px, 1fr) minmax(150px, 2fr) minmax(120px, 1.5fr) minmax(120px, 1.5fr);
-            gap: 1rem;
-            padding: 1rem;
-            font-weight: bold;
-            color: white;
-            background: transparent;
-            border-bottom: 2px solid #666;
-            width: 100%;
-        }
-        .select-cell {
-            text-align: center;
-        }
-        .id-cell {
-            font-family: monospace;
-            color: #9ca3af;
-            text-align: center;
-        }
-        .symbol-cell {
-            color: white;
-            font-weight: 600;
-            font-family: monospace;
-        }
-        .date-cell {
-            font-size: 0.9rem;
-            color: #d1d5db;
-            font-family: monospace;
-        }
-        .checkbox-style {
-            transform: scale(1.2);
-        }
-        </style>
-        """, unsafe_allow_html=True)
-        
-        # Table container
-        st.markdown('<div class="ticker-table">', unsafe_allow_html=True)
-        
-        # Header row
-        st.markdown("""
-        <div class="ticker-header">
-            <div>Select</div>
-            <div>id</div>
-            <div>symbol</div>
-            <div>themes</div>
-            <div>added_date</div>
-            <div>last_updated</div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # Data rows with selection checkboxes  
-        selected_tickers = []
-        for idx, row in df.iterrows():
-            # Use 6 columns to match the header: Select, ID, Symbol, Themes, Added Date, Last Updated
-            col1, col2, col3, col4, col5, col6 = st.columns([1, 1, 1, 2, 1.5, 1.5])
+            # Format dates
+            if 'created_at' in df.columns:
+                df['created_at'] = df['created_at'].apply(lambda x: format_datetime(x, 'N/A'))
+            if 'last_updated' in df.columns:
+                df['last_updated'] = df['last_updated'].apply(lambda x: format_datetime(x, 'N/A'))
             
-            with col1:
-                is_selected = st.checkbox(
-                    f"Select {row['symbol']}", 
-                    key=f"select_{row['id']}",
-                    label_visibility="collapsed"
-                )
-                if is_selected:
-                    selected_tickers.append(row['id'])
+            # Reorder columns to show themes after symbol
+            if 'themes' in df.columns:
+                cols = list(df.columns)
+                cols.remove('themes')
+                if 'symbol' in cols:
+                    symbol_idx = cols.index('symbol')
+                    cols.insert(symbol_idx + 1, 'themes')
+                    df = df[cols]
             
-            with col2:
-                st.markdown(f'<div class="id-cell">{row["id"]}</div>', unsafe_allow_html=True)
+            # Add selection column
+            df.insert(0, 'Select', False)
             
-            with col3:
-                st.markdown(f'<div class="symbol-cell">{row["symbol"]}</div>', unsafe_allow_html=True)
+            # Display clean ticker table
+            st.markdown("## Ticker List")
             
-            with col4:
-                # Get themes for this ticker
-                try:
-                    ticker_themes = theme_repo.get_themes_for_ticker(row['id'], user_id)
-                    if ticker_themes and isinstance(ticker_themes, list):
-                        themes_text = ', '.join([t['name'] for t in ticker_themes if isinstance(t, dict) and 'name' in t])
-                        if themes_text:
-                            st.markdown(f'<div class="date-cell">{themes_text}</div>', unsafe_allow_html=True)
+            # Custom CSS for clean table design
+            st.markdown("""
+            <style>
+            .ticker-table {
+                width: 100%;
+                max-width: 100%;
+                margin-top: 1rem;
+            }
+            .ticker-row {
+                display: grid;
+                grid-template-columns: minmax(60px, 0.8fr) minmax(60px, 0.8fr) minmax(80px, 1fr) minmax(150px, 2fr) minmax(120px, 1.5fr) minmax(120px, 1.5fr);
+                gap: 1rem;
+                padding: 0.75rem 1rem;
+                border-bottom: 1px solid #333;
+                background: transparent;
+                color: white;
+                align-items: center;
+                width: 100%;
+            }
+            .ticker-header {
+                display: grid;
+                grid-template-columns: minmax(60px, 0.8fr) minmax(60px, 0.8fr) minmax(80px, 1fr) minmax(150px, 2fr) minmax(120px, 1.5fr) minmax(120px, 1.5fr);
+                gap: 1rem;
+                padding: 1rem;
+                font-weight: bold;
+                color: white;
+                background: transparent;
+                border-bottom: 2px solid #666;
+                width: 100%;
+            }
+            .select-cell {
+                text-align: center;
+            }
+            .id-cell {
+                font-family: monospace;
+                color: #9ca3af;
+                text-align: center;
+            }
+            .symbol-cell {
+                color: white;
+                font-weight: 600;
+                font-family: monospace;
+            }
+            .date-cell {
+                font-size: 0.9rem;
+                color: #d1d5db;
+                font-family: monospace;
+            }
+            .checkbox-style {
+                transform: scale(1.2);
+            }
+            </style>
+            """, unsafe_allow_html=True)
+            
+            # Table container
+            st.markdown('<div class="ticker-table">', unsafe_allow_html=True)
+            
+            # Header row
+            st.markdown("""
+            <div class="ticker-header">
+                <div>Select</div>
+                <div>id</div>
+                <div>symbol</div>
+                <div>themes</div>
+                <div>added_date</div>
+                <div>last_updated</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Data rows with selection checkboxes  
+            selected_tickers = []
+            for idx, row in df.iterrows():
+                # Use 6 columns to match the header: Select, ID, Symbol, Themes, Added Date, Last Updated
+                col1, col2, col3, col4, col5, col6 = st.columns([1, 1, 1, 2, 1.5, 1.5])
+                
+                with col1:
+                    is_selected = st.checkbox(
+                        f"Select {row['symbol']}", 
+                        key=f"select_{row['id']}",
+                        label_visibility="collapsed"
+                    )
+                    if is_selected:
+                        selected_tickers.append(row['id'])
+                
+                with col2:
+                    st.markdown(f'<div class="id-cell">{row["id"]}</div>', unsafe_allow_html=True)
+                
+                with col3:
+                    st.markdown(f'<div class="symbol-cell">{row["symbol"]}</div>', unsafe_allow_html=True)
+                
+                with col4:
+                    # Get themes for this ticker
+                    try:
+                        ticker_themes = theme_repo.get_themes_for_ticker(row['id'], user_id)
+                        if ticker_themes and isinstance(ticker_themes, list):
+                            themes_text = ', '.join([t['name'] for t in ticker_themes if isinstance(t, dict) and 'name' in t])
+                            if themes_text:
+                                st.markdown(f'<div class="date-cell">{themes_text}</div>', unsafe_allow_html=True)
+                            else:
+                                st.markdown('<div class="date-cell" style="color: #ffa500;">🔺 ORPHANED</div>', unsafe_allow_html=True)
                         else:
                             st.markdown('<div class="date-cell" style="color: #ffa500;">🔺 ORPHANED</div>', unsafe_allow_html=True)
-                    else:
-                        st.markdown('<div class="date-cell" style="color: #ffa500;">🔺 ORPHANED</div>', unsafe_allow_html=True)
-                except Exception as e:
-                    # Show error in themes column for debugging
-                    st.markdown(f'<div class="date-cell" style="color: red;">Error: {str(e)}</div>', unsafe_allow_html=True)
+                    except Exception as e:
+                        # Show error in themes column for debugging
+                        st.markdown(f'<div class="date-cell" style="color: red;">Error: {str(e)}</div>', unsafe_allow_html=True)
+                
+                with col5:
+                    added_date = row.get('created_at', 'N/A')
+                    if added_date != 'N/A' and len(str(added_date)) > 10:
+                        added_date = str(added_date)[:10]  # Show just date part
+                    st.markdown(f'<div class="date-cell">{added_date}</div>', unsafe_allow_html=True)
+                
+                with col6:
+                    last_updated = row.get('last_updated', 'N/A')
+                    if last_updated != 'N/A' and len(str(last_updated)) > 10:
+                        last_updated = str(last_updated)[:10]  # Show just date part
+                    st.markdown(f'<div class="date-cell">{last_updated}</div>', unsafe_allow_html=True)
             
-            with col5:
-                added_date = row.get('created_at', 'N/A')
-                if added_date != 'N/A' and len(str(added_date)) > 10:
-                    added_date = str(added_date)[:10]  # Show just date part
-                st.markdown(f'<div class="date-cell">{added_date}</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
             
-            with col6:
-                last_updated = row.get('last_updated', 'N/A')
-                if last_updated != 'N/A' and len(str(last_updated)) > 10:
-                    last_updated = str(last_updated)[:10]  # Show just date part
-                st.markdown(f'<div class="date-cell">{last_updated}</div>', unsafe_allow_html=True)
-        
-        st.markdown('</div>', unsafe_allow_html=True)
-        
-        # Pagination controls
-        total_pages = (total_count + st.session_state.page_size - 1) // st.session_state.page_size
-        
-        if total_pages > 1:
-            col1, col2, col3, col4, col5 = st.columns([1, 1, 2, 1, 1])
+            # Pagination controls
+            total_pages = (total_count + st.session_state.page_size - 1) // st.session_state.page_size
             
-            with col1:
-                if st.button("⏮️ First", disabled=st.session_state.page == 1, key="dashboard_first_btn"):
-                    st.session_state.page = 1
-                    st.rerun()
+            if total_pages > 1:
+                col1, col2, col3, col4, col5 = st.columns([1, 1, 2, 1, 1])
+                
+                with col1:
+                    if st.button("⏮️ First", disabled=st.session_state.page == 1, key="dashboard_first_btn"):
+                        st.session_state.page = 1
+                        st.rerun()
 
-            with col2:
-                if st.button("◀️ Prev", disabled=st.session_state.page == 1, key="dashboard_prev_btn"):
-                    st.session_state.page -= 1
-                    st.rerun()
+                with col2:
+                    if st.button("◀️ Prev", disabled=st.session_state.page == 1, key="dashboard_prev_btn"):
+                        st.session_state.page -= 1
+                        st.rerun()
 
-            with col3:
-                st.write(f"Page {st.session_state.page} of {total_pages}")
-            
-            with col4:
-                if st.button("Next ▶️", disabled=st.session_state.page >= total_pages, key="dashboard_next_btn"):
-                    st.session_state.page += 1
-                    st.rerun()
+                with col3:
+                    st.write(f"Page {st.session_state.page} of {total_pages}")
+                
+                with col4:
+                    if st.button("Next ▶️", disabled=st.session_state.page >= total_pages, key="dashboard_next_btn"):
+                        st.session_state.page += 1
+                        st.rerun()
 
-            with col5:
-                if st.button("Last ⏭️", disabled=st.session_state.page >= total_pages, key="dashboard_last_btn"):
-                    st.session_state.page = total_pages
-                    st.rerun()
-        
-        # Bulk actions for selected tickers
-        if selected_tickers:
-            st.markdown("---")  # Add separator line
-            st.markdown(f"### Actions for Selected Tickers ({len(selected_tickers)} selected)")
+                with col5:
+                    if st.button("Last ⏭️", disabled=st.session_state.page >= total_pages, key="dashboard_last_btn"):
+                        st.session_state.page = total_pages
+                        st.rerun()
             
-            # Theme-aware delete button text and info
-            if st.session_state.selected_theme_filter == "ORPHANED":
-                button_text = "🗑️ Delete Permanently"
-                info_text = "💡 Will delete orphaned tickers permanently (recommended cleanup)."
-                info_type = "info"
-            elif st.session_state.selected_theme_filter:
-                theme_name = next((t['name'] for t in user_themes if t['id'] == st.session_state.selected_theme_filter), 'Unknown')
-                button_text = f"🗑️ Remove from '{theme_name}'"
-                info_text = f"💡 Will only remove from theme '{theme_name}'. Tickers in other themes will remain."
-                info_type = "info"
-            else:
-                button_text = "🗑️ Delete Selected"
-                info_text = "⚠️ Will delete tickers permanently from all themes."
-                info_type = "warning"
-            
-            # Display info message
-            if info_type == "info":
-                st.info(info_text)
-            else:
-                st.warning(info_text)
-            
-            # Display the action button prominently
-            if st.button(button_text, type="primary", key="dashboard_delete_btn", use_container_width=True):
-                    try:
-                        if st.session_state.selected_theme_filter == "ORPHANED":
-                            # Delete orphaned tickers permanently (recommended)
-                            deleted_count = repo.bulk_delete(selected_tickers)
-                            if deleted_count > 0:
-                                st.success(f"✅ Permanently deleted {deleted_count} orphaned ticker(s)")
-                                st.rerun()
-                            else:
-                                st.error("Failed to delete orphaned tickers")
-                        elif st.session_state.selected_theme_filter:
-                            # Remove from theme only
-                            theme_id = st.session_state.selected_theme_filter
-                            if theme_id:
-                                removed_count = 0
-                                for ticker_id in selected_tickers:
-                                    if theme_repo.remove_ticker_from_theme(theme_id, ticker_id):
-                                        removed_count += 1
-                                
-                                if removed_count > 0:
-                                    theme_name = next((t['name'] for t in user_themes if t['id'] == st.session_state.selected_theme_filter), 'Unknown')
-                                    st.success(f"✅ Removed {removed_count} ticker(s) from theme '{theme_name}'")
+            # Bulk actions for selected tickers
+            if selected_tickers:
+                st.markdown("---")  # Add separator line
+                st.markdown(f"### Actions for Selected Tickers ({len(selected_tickers)} selected)")
+                
+                # Theme-aware delete button text and info
+                if st.session_state.selected_theme_filter == "ORPHANED":
+                    button_text = "🗑️ Delete Permanently"
+                    info_text = "💡 Will delete orphaned tickers permanently (recommended cleanup)."
+                    info_type = "info"
+                elif st.session_state.selected_theme_filter:
+                    theme_name = next((t['name'] for t in user_themes if t['id'] == st.session_state.selected_theme_filter), 'Unknown')
+                    button_text = f"🗑️ Remove from '{theme_name}'"
+                    info_text = f"💡 Will only remove from theme '{theme_name}'. Tickers in other themes will remain."
+                    info_type = "info"
+                else:
+                    button_text = "🗑️ Delete Selected"
+                    info_text = "⚠️ Will delete tickers permanently from all themes."
+                    info_type = "warning"
+                
+                # Display info message
+                if info_type == "info":
+                    st.info(info_text)
+                else:
+                    st.warning(info_text)
+                
+                # Display the action button prominently
+                if st.button(button_text, type="primary", key="dashboard_delete_btn", use_container_width=True):
+                        try:
+                            if st.session_state.selected_theme_filter == "ORPHANED":
+                                # Delete orphaned tickers permanently (recommended)
+                                deleted_count = repo.bulk_delete(selected_tickers)
+                                if deleted_count > 0:
+                                    st.success(f"✅ Permanently deleted {deleted_count} orphaned ticker(s)")
                                     st.rerun()
                                 else:
-                                    st.error("Failed to remove tickers from theme")
-                        else:
-                            # Delete tickers entirely (original behavior)
-                            deleted_count = repo.bulk_delete(selected_tickers)
-                            if deleted_count > 0:
-                                st.success(f"✅ Deleted {deleted_count} ticker(s)")
-                                st.rerun()
+                                    st.error("Failed to delete orphaned tickers")
+                            elif st.session_state.selected_theme_filter:
+                                # Remove from theme only
+                                theme_id = st.session_state.selected_theme_filter
+                                if theme_id:
+                                    removed_count = 0
+                                    for ticker_id in selected_tickers:
+                                        if theme_repo.remove_ticker_from_theme(theme_id, ticker_id):
+                                            removed_count += 1
+                                    
+                                    if removed_count > 0:
+                                        theme_name = next((t['name'] for t in user_themes if t['id'] == st.session_state.selected_theme_filter), 'Unknown')
+                                        st.success(f"✅ Removed {removed_count} ticker(s) from theme '{theme_name}'")
+                                        st.rerun()
+                                    else:
+                                        st.error("Failed to remove tickers from theme")
                             else:
-                                st.error("Failed to delete tickers")
-                    except Exception as e:
-                        st.error(f"Error during operation: {str(e)}")
-        
-        # Export functionality
-        st.write("### Export")
-        
-        col1, col2 = st.columns([1, 5])
-        
-        with col1:
-            # Create CSV export
-            export_symbols = [t['symbol'] for t in tickers]
-            csv_data = pd.DataFrame({'symbol': export_symbols})
-            
-            st.download_button(
-                label="📥 Export Current Page",
-                data=csv_data.to_csv(index=False),
-                file_name="tickers_export.csv",
-                mime="text/csv",
-                help="Export tickers on current page to CSV",
-                key="dashboard_export_page_btn"
-            )
-        
-        with col2:
-            if st.button("📥 Export All Tickers", key="dashboard_export_btn"):
-                try:
-                    all_tickers = repo.get_active_tickers()
-                    if all_tickers:
-                        csv_data = pd.DataFrame({'symbol': all_tickers})
-                        st.download_button(
-                            label="Download All Tickers CSV",
-                            data=csv_data.to_csv(index=False),
-                            file_name="all_tickers_export.csv",
-                            mime="text/csv",
-                            key="dashboard_export_all_btn"
-                        )
-                    else:
-                        st.info("No tickers to export")
-                except Exception as e:
-                    st.error(f"Error exporting tickers: {str(e)}")
+                                # Delete tickers entirely (original behavior)
+                                deleted_count = repo.bulk_delete(selected_tickers)
+                                if deleted_count > 0:
+                                    st.success(f"✅ Deleted {deleted_count} ticker(s)")
+                                    st.rerun()
+                                else:
+                                    st.error("Failed to delete tickers")
+                        except Exception as e:
+                            st.error(f"Error during operation: {str(e)}")
     
     except Exception as e:
         st.error(f"Error loading tickers: {str(e)}")
+    
+    # Save State & Import Section (always visible, outside try-except)
+    st.write("### State Management")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        if st.button("💾 Save State", key="save_state_btn", help="Export all your tickers and themes to CSV"):
+            try:
+                state_manager = StateManager()
+                csv_bytes, filename = state_manager.export_state(user_id)
+                st.success("✅ State saved to database and ready to download!")
+                st.download_button(
+                    label="📥 Download Now",
+                    data=csv_bytes,
+                    file_name=filename,
+                    mime="text/csv",
+                    key="download_state_btn_now"
+                )
+            except Exception as e:
+                st.error(f"Error exporting state: {str(e)}")
+    
+    with col2:
+        if st.button("📋 My Saved States", key="view_exports_btn", help="View all your previously saved states"):
+            st.session_state.show_saved_states = True
+        
+        # Display saved states if button was clicked
+        if st.session_state.get('show_saved_states', False):
+            try:
+                state_manager = StateManager()
+                username = user.get("username", "admin") if 'user' in locals() else "admin"
+                
+                # Get the username from repository
+                user_repo = UserRepository()
+                user_obj = user_repo.get_user_by_id(user_id)
+                if user_obj:
+                    username = user_obj["username"]
+                
+                exports = state_manager.get_user_exports(username)
+                
+                if exports:
+                    st.write("#### Your Saved States:")
+                    for export in exports:
+                        col_date, col_count, col_download = st.columns([2, 1, 1])
+                        
+                        with col_date:
+                            export_date = export["export_date"].strftime("%Y-%m-%d %H:%M:%S") if hasattr(export["export_date"], 'strftime') else str(export["export_date"])
+                            st.write(f"📅 {export_date}")
+                        
+                        with col_count:
+                            st.write(f"📊 {export['record_count']} items")
+                        
+                        with col_download:
+                            if st.button("⬇️ Download", key=f"download_export_{export['id']}"):
+                                try:
+                                    csv_bytes = state_manager.get_export_csv(export['id'])
+                                    if csv_bytes:
+                                        st.download_button(
+                                            label="Save File",
+                                            data=csv_bytes,
+                                            file_name=export["filename"],
+                                            mime="text/csv",
+                                            key=f"download_file_{export['id']}"
+                                        )
+                                    else:
+                                        st.error("Could not retrieve export file")
+                                except Exception as e:
+                                    st.error(f"Error downloading export: {str(e)}")
+                else:
+                    st.info("No saved states found. Click 'Save State' to create one!")
+                
+            except Exception as e:
+                st.error(f"Error loading saved states: {str(e)}")
+    
+    with col3:
+        uploaded_file = st.file_uploader(
+            "📤 Bulk Import State",
+            type="csv",
+            key="bulk_import_uploader",
+            help="Upload a previously saved state file to restore your tickers and themes"
+        )
+        
+        if uploaded_file is not None:
+            # Check if we've already processed this file
+            file_id = f"{uploaded_file.name}_{uploaded_file.size}"
+            if 'last_imported_file' not in st.session_state:
+                st.session_state.last_imported_file = None
+            
+            if file_id != st.session_state.last_imported_file:
+                try:
+                    # Read the file
+                    csv_content = uploaded_file.getvalue().decode("utf-8")
+                    
+                    # Import the state
+                    state_manager = StateManager()
+                    stats = state_manager.import_state(csv_content, user_id)
+                    
+                    # Mark this file as processed
+                    st.session_state.last_imported_file = file_id
+                    
+                    # Show results
+                    st.success("✅ Import completed!")
+                    col_a, col_b, col_c = st.columns(3)
+                    with col_a:
+                        st.metric("Tickers Added", stats["tickers_added"])
+                    with col_b:
+                        st.metric("Themes Created", stats["themes_created"])
+                    with col_c:
+                        st.metric("Skipped (Duplicates)", stats["skipped"])
+                    
+                    if stats["errors"]:
+                        with st.expander(f"⚠️ {len(stats['errors'])} Errors"):
+                            for error in stats["errors"][:10]:  # Show first 10 errors
+                                st.warning(error)
+                    
+                except Exception as e:
+                    st.error(f"Error importing state: {str(e)}")
 
 
 def render_ticker_stats(repo: TickerRepository, user_id: int = 1) -> None:

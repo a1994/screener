@@ -18,8 +18,8 @@ plotly>=5.18.0
 requests>=2.31.0
 yfinance>=0.2.18
 
-# Database (SQLite is built-in, but this ensures latest version)
-# No additional package needed for SQLite
+# Database
+psycopg2-binary>=2.9.0
 
 # Development and testing
 pytest>=7.4.0
